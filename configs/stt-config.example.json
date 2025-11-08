@@ -1,0 +1,46 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "read_timeout": 20
+  },
+  "asr": {
+    "model_path": "/app/models/asr/model.onnx",
+    "tokens_path": "/app/models/asr/tokens.txt",
+    "language": "zh",
+    "provider": {
+      "provider": "cpu",
+      "device_id": 0,
+      "num_threads": 4
+    },
+    "debug": false
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "feature_dim": 80,
+    "chunk_size": 4096,
+    "normalize_factor": 32768.0
+  },
+  "websocket": {
+    "read_timeout": 20,
+    "max_message_size": 2097152,
+    "read_buffer_size": 1024,
+    "write_buffer_size": 1024,
+    "enable_compression": false
+  },
+  "session": {
+    "send_queue_size": 500,
+    "max_send_errors": 10
+  },
+  "logging": {
+    "level": "info",
+    "format": "text",
+    "output": "both",
+    "file_path": "/app/logs/stt.log",
+    "max_size": 100,
+    "max_backups": 5,
+    "max_age": 30,
+    "compress": false
+  }
+}
+

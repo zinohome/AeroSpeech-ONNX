@@ -1,0 +1,45 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8081,
+    "read_timeout": 20
+  },
+  "tts": {
+    "model_path": "/app/models/tts/model.onnx",
+    "voices_path": "/app/models/tts/voices.bin",
+    "tokens_path": "/app/models/tts/tokens.txt",
+    "data_dir": "/app/models/tts/espeak-ng-data",
+    "provider": {
+      "provider": "cpu",
+      "device_id": 0,
+      "num_threads": 4
+    },
+    "debug": false
+  },
+  "audio": {
+    "sample_rate": 24000,
+    "chunk_size": 4096
+  },
+  "websocket": {
+    "read_timeout": 20,
+    "max_message_size": 2097152,
+    "read_buffer_size": 1024,
+    "write_buffer_size": 1024,
+    "enable_compression": false
+  },
+  "session": {
+    "send_queue_size": 500,
+    "max_send_errors": 10
+  },
+  "logging": {
+    "level": "info",
+    "format": "text",
+    "output": "both",
+    "file_path": "/app/logs/tts.log",
+    "max_size": 100,
+    "max_backups": 5,
+    "max_age": 30,
+    "compress": false
+  }
+}
+

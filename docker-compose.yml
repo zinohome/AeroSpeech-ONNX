@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  stt-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.stt
+    container_name: aerospeech-stt
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs:/app/configs
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - STT_CONFIG_PATH=/app/configs/stt-config.json
+    restart: unless-stopped
+    networks:
+      - aerospeech-network
+
+  tts-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.tts
+    container_name: aerospeech-tts
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./configs:/app/configs
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - TTS_CONFIG_PATH=/app/configs/tts-config.json
+    restart: unless-stopped
+    networks:
+      - aerospeech-network
+
+networks:
+  aerospeech-network:
+    driver: bridge
+

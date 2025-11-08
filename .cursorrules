@@ -1,0 +1,429 @@
+# Go语言开发规范 - Cursor Rules
+
+## 代码风格
+
+### 格式化
+- 使用 `gofmt` 格式化代码
+- 使用 `goimports` 管理导入
+- 遵循 Go 官方代码风格指南
+
+### 命名规范
+- **包名**: 小写，简短，有意义
+  - ✅ `package config`, `package logger`, `package asr`
+  - ❌ `package Config`, `package myPackage`, `package pkg`
+
+- **变量名**: 驼峰命名，简短有意义
+  - ✅ `var userName string`, `var maxRetries int`, `var isConnected bool`
+  - ❌ `var user_name string`, `var max_retries int`, `var flag bool`
+
+- **函数名**: 驼峰命名，动词开头
+  - ✅ `func GetUser() {}`, `func CreateSession() {}`, `func IsValid() bool {}`
+  - ❌ `func getUser() {}`, `func create_session() {}`, `func valid() bool {}`
+
+- **接口名**: 驼峰命名，通常以-er结尾
+  - ✅ `type Reader interface {}`, `type Writer interface {}`, `type ASRProvider interface {}`
+  - ❌ `type Read interface {}`, `type Write interface {}`
+
+- **常量**: 全大写，下划线分隔
+  - ✅ `const MaxRetries = 3`, `const DefaultTimeout = 30 * time.Second`
+
+## 错误处理
+
+### 错误返回
+- 错误作为最后一个返回值
+- 错误使用 `error` 类型
+- 错误信息要清晰明确
+
+```go
+// ✅ 好的错误处理
+func ProcessAudio(data []byte) (string, error) {
+    if len(data) == 0 {
+        return "", fmt.Errorf("audio data is empty")
+    }
+    return result, nil
+}
+
+// ❌ 不好的错误处理
+func ProcessAudio(data []byte) string {
+    if len(data) == 0 {
+        return "" // 没有错误信息
+    }
+    return result
+}
+```
+
+### 错误包装
+- 使用 `fmt.Errorf` 和 `%w` 包装错误
+- 提供上下文信息
+
+```go
+func LoadModel(path string) error {
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return fmt.Errorf("failed to load model from %s: %w", path, err)
+    }
+    // ...
+}
+```
+
+### 错误检查
+- 所有错误必须检查
+- 不要忽略错误
+
+```go
+// ✅ 好的错误检查
+result, err := ProcessAudio(data)
+if err != nil {
+    return fmt.Errorf("failed to process audio: %w", err)
+}
+
+// ❌ 不好的错误检查
+result, _ := ProcessAudio(data) // 忽略了错误
+```
+
+## 并发安全
+
+### 互斥锁
+- 使用 `sync.Mutex` 保护共享资源
+- 锁的粒度要合适
+- 使用 `defer` 确保解锁
+
+```go
+type SafeCounter struct {
+    mu    sync.Mutex
+    count int
+}
+
+func (c *SafeCounter) Increment() {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.count++
+}
+```
+
+### 通道
+- 使用通道进行goroutine间通信
+- 明确通道的用途（发送/接收）
+
+```go
+// ✅ 好的通道使用
+func worker(jobs <-chan Job, results chan<- Result) {
+    for job := range jobs {
+        result := process(job)
+        results <- result
+    }
+}
+```
+
+### 上下文
+- 使用 `context.Context` 控制超时和取消
+- 传递上下文到所有异步操作
+
+```go
+func ProcessWithTimeout(ctx context.Context, data []byte) (string, error) {
+    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+    defer cancel()
+    
+    resultCh := make(chan string, 1)
+    errCh := make(chan error, 1)
+    
+    go func() {
+        result, err := process(data)
+        if err != nil {
+            errCh <- err
+            return
+        }
+        resultCh <- result
+    }()
+    
+    select {
+    case result := <-resultCh:
+        return result, nil
+    case err := <-errCh:
+        return "", err
+    case <-ctx.Done():
+        return "", ctx.Err()
+    }
+}
+```
+
+## 资源管理
+
+### 资源释放
+- 使用 `defer` 确保资源释放
+- 及时释放不再使用的资源
+
+```go
+func ProcessFile(path string) error {
+    file, err := os.Open(path)
+    if err != nil {
+        return err
+    }
+    defer file.Close() // 确保文件关闭
+    
+    // 处理文件
+    return nil
+}
+```
+
+### 资源池
+- 使用资源池复用资源
+- 避免频繁创建/销毁资源
+
+```go
+type Pool struct {
+    resources chan *Resource
+    factory   func() *Resource
+}
+
+func (p *Pool) Get() *Resource {
+    select {
+    case r := <-p.resources:
+        return r
+    default:
+        return p.factory()
+    }
+}
+
+func (p *Pool) Put(r *Resource) {
+    select {
+    case p.resources <- r:
+    default:
+        // 池已满，丢弃资源
+    }
+}
+```
+
+## 测试
+
+### 单元测试
+- 每个包都要有测试文件
+- 测试文件以 `_test.go` 结尾
+- 测试函数以 `Test` 开头
+- 使用表驱动测试提高覆盖率
+
+```go
+func TestProcessAudio(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   []byte
+        want    string
+        wantErr bool
+    }{
+        {
+            name:    "valid audio",
+            input:   []byte{0x00, 0x01, 0x02},
+            want:    "result",
+            wantErr: false,
+        },
+        {
+            name:    "empty audio",
+            input:   []byte{},
+            want:    "",
+            wantErr: true,
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := ProcessAudio(tt.input)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("ProcessAudio() error = %v, wantErr %v", err, tt.wantErr)
+                return
+            }
+            if got != tt.want {
+                t.Errorf("ProcessAudio() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 测试覆盖率
+- 目标覆盖率: ≥80%
+- 核心模块覆盖率: ≥90%
+- 使用 `go test -cover` 查看覆盖率
+
+## 性能优化
+
+### 避免不必要的分配
+- 使用对象池复用对象
+- 预分配切片容量
+
+```go
+// ✅ 好的做法
+result := make([]byte, 0, 1024) // 预分配容量
+
+// ❌ 不好的做法
+var result []byte // 每次append可能重新分配
+```
+
+### 减少内存拷贝
+- 使用切片而不是数组
+- 避免不必要的字符串转换
+
+```go
+// ✅ 好的做法
+func process(data []byte) {
+    // 直接使用切片，不拷贝
+}
+
+// ❌ 不好的做法
+func process(data []byte) {
+    newData := make([]byte, len(data))
+    copy(newData, data) // 不必要的拷贝
+}
+```
+
+### 并发优化
+- 使用goroutine池限制并发数
+- 使用缓冲通道提高吞吐量
+
+```go
+func ProcessBatch(jobs []Job) []Result {
+    const numWorkers = 10
+    jobCh := make(chan Job, len(jobs))
+    resultCh := make(chan Result, len(jobs))
+    
+    // 启动worker
+    for i := 0; i < numWorkers; i++ {
+        go func() {
+            for job := range jobCh {
+                resultCh <- process(job)
+            }
+        }()
+    }
+    
+    // 发送任务
+    for _, job := range jobs {
+        jobCh <- job
+    }
+    close(jobCh)
+    
+    // 收集结果
+    results := make([]Result, 0, len(jobs))
+    for i := 0; i < len(jobs); i++ {
+        results = append(results, <-resultCh)
+    }
+    
+    return results
+}
+```
+
+## 注释规范
+
+### 包注释
+- 每个包必须有包注释
+
+```go
+// Package config provides configuration management functionality.
+package config
+```
+
+### 导出函数注释
+- 所有导出函数必须有注释
+
+```go
+// NewManager creates a new ASR manager instance.
+// It initializes the ASR provider and resource pool.
+func NewManager(config *Config) (*Manager, error) {
+    // ...
+}
+```
+
+### 复杂逻辑注释
+- 复杂逻辑必须有注释
+
+```go
+// Convert PCM16 audio data to float32 samples.
+// The input is little-endian 16-bit PCM data.
+func convertPCM16ToFloat32(data []byte) []float32 {
+    // ...
+}
+```
+
+## 项目结构
+
+### 目录结构
+```
+project/
+├── cmd/              # 可执行程序入口
+├── internal/          # 内部代码（不对外暴露）
+├── pkg/              # 可复用的公共包
+├── web/              # Web前端资源
+├── configs/          # 配置文件
+├── docs/             # 文档
+├── scripts/           # 脚本
+├── test/             # 测试文件
+├── go.mod
+└── README.md
+```
+
+### 包设计原则
+- **单一职责**: 每个包只做一件事
+- **低耦合**: 包之间依赖最小化
+- **高内聚**: 包内功能相关性强
+
+### 接口设计
+- 接口要小，职责单一
+- 接口命名清晰
+- 优先使用接口而非具体类型
+
+```go
+// ✅ 好的接口设计
+type ASRProvider interface {
+    Transcribe(audio []byte) (string, error)
+    GetSampleRate() int
+}
+
+// ❌ 不好的接口设计
+type Provider interface {
+    // 包含太多方法
+    Transcribe(audio []byte) (string, error)
+    Synthesize(text string) ([]byte, error)
+    ProcessVideo(video []byte) (string, error)
+}
+```
+
+## 代码审查清单
+
+- [ ] 代码符合Go语言规范
+- [ ] 错误处理完整
+- [ ] 并发安全
+- [ ] 资源正确释放
+- [ ] 有适当的注释
+- [ ] 有单元测试
+- [ ] 测试覆盖率≥80%
+- [ ] 无明显的性能问题
+- [ ] 无安全隐患
+
+## 提交信息规范
+
+### 格式
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### 类型
+- `feat`: 新功能
+- `fix`: Bug修复
+- `docs`: 文档更新
+- `style`: 代码格式
+- `refactor`: 重构
+- `test`: 测试
+- `chore`: 构建/工具
+
+### 示例
+```
+feat(asr): add batch recognition support
+
+Add support for batch audio file recognition.
+This allows processing multiple files in a single request.
+
+Closes #123
+```
+

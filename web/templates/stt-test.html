@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STT 测试界面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            min-height: 100px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result-item {
+            padding: 5px;
+            margin: 5px 0;
+            border-left: 3px solid #007bff;
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>STT 语音识别测试</h1>
+        
+        <div id="status" class="status disconnected">未连接</div>
+        
+        <div>
+            <button id="connectBtn" onclick="connect()">连接</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>断开</button>
+            <button id="recordBtn" onclick="toggleRecord()" disabled>开始录音</button>
+            <button id="uploadBtn" onclick="uploadFile()" disabled>上传文件</button>
+        </div>
+        
+        <div>
+            <h3>识别结果：</h3>
+            <div id="results"></div>
+        </div>
+        
+        <div>
+            <h3>文件上传：</h3>
+            <input type="file" id="fileInput" accept="audio/*" onchange="handleFileSelect(event)">
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                updateStatus('已连接', true);
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('recordBtn').disabled = false;
+                document.getElementById('uploadBtn').disabled = false;
+            };
+            
+            ws.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateStatus('连接错误', false);
+            };
+            
+            ws.onclose = function() {
+                updateStatus('已断开', false);
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('recordBtn').disabled = true;
+                document.getElementById('uploadBtn').disabled = true;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            if (isRecording) {
+                stopRecording();
+            }
+        }
+
+        function updateStatus(text, connected) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+        }
+
+        function handleMessage(message) {
+            if (message.type === 'connection') {
+                console.log('Connected:', message.data);
+            } else if (message.type === 'result') {
+                addResult(message.data.text);
+            } else if (message.type === 'error') {
+                addResult('错误: ' + message.error);
+            }
+        }
+
+        function addResult(text) {
+            const resultsEl = document.getElementById('results');
+            const item = document.createElement('div');
+            item.className = 'result-item';
+            item.textContent = new Date().toLocaleTimeString() + ': ' + text;
+            resultsEl.appendChild(item);
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+        }
+
+        async function toggleRecord() {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioContext = new AudioContext({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                processor.onaudioprocess = function(e) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        const int16Data = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                        }
+                        ws.send(int16Data.buffer);
+                    }
+                };
+                
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                isRecording = true;
+                document.getElementById('recordBtn').textContent = '停止录音';
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                alert('无法访问麦克风: ' + error.message);
+            }
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('recordBtn').textContent = '开始录音';
+        }
+
+        function uploadFile() {
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            fetch('/api/v1/stt/recognize', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    addResult(data.data.text);
+                } else {
+                    addResult('错误: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Upload error:', error);
+                addResult('上传失败: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
+
