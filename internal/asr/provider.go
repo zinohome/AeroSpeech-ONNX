@@ -94,6 +94,15 @@ func (p *ASRProvider) Transcribe(audio []byte) (string, error) {
 
 	// 获取结果
 	result := stream.GetResult()
+	if result == nil {
+		return "", fmt.Errorf("failed to get recognition result")
+	}
+	
+	// 检查result.Text是否为空
+	if result.Text == "" {
+		return "", nil // 空结果也是有效结果
+	}
+	
 	return result.Text, nil
 }
 

@@ -31,6 +31,8 @@ type TTSModelConfig struct {
 	VoicesPath string         `mapstructure:"voices_path" json:"voices_path"`
 	TokensPath string         `mapstructure:"tokens_path" json:"tokens_path"`
 	DataDir    string         `mapstructure:"data_dir" json:"data_dir"`
+	DictDir    string         `mapstructure:"dict_dir" json:"dict_dir"`
+	Lexicon    string         `mapstructure:"lexicon" json:"lexicon"` // 逗号分隔的lexicon文件路径
 	Provider   ProviderConfig `mapstructure:"provider" json:"provider"`
 	Debug      bool           `mapstructure:"debug" json:"debug"`
 }

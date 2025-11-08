@@ -2,6 +2,9 @@ package tts
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/config"
 	"github.com/zhangjun/AeroSpeech-ONNX/pkg/utils"
@@ -29,11 +32,68 @@ type TTSProvider struct {
 func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
 	// 构建sherpa-onnx配置
 	sampleRate := 24000 // 默认采样率
+	
+	// 构建Kokoro模型配置
+	kokoroConfig := sherpa.OfflineTtsKokoroModelConfig{
+		Model: cfg.ModelPath,
+	}
+	
+	// 设置Tokens（必需）
+	if cfg.TokensPath != "" {
+		kokoroConfig.Tokens = cfg.TokensPath
+	}
+	
+	// 设置Voices（可选，用于多说话人）
+	// 注意：只有当VoicesPath非空时才设置，否则sherpa-onnx会尝试加载空字符串导致错误
+	if cfg.VoicesPath != "" {
+		kokoroConfig.Voices = cfg.VoicesPath
+	}
+	// 如果VoicesPath为空，不设置Voices字段，让sherpa-onnx使用默认行为
+	
+	// 设置DataDir（必需，用于文本处理）
+	// 如果配置中没有指定，尝试使用默认路径
+	dataDir := cfg.DataDir
+	if dataDir == "" && cfg.ModelPath != "" {
+		// 尝试从model路径推断dataDir路径
+		// 例如：如果model在 models/tts/kokoro-multi-lang-v1_0/model.onnx
+		// 则dataDir应该在 models/tts/kokoro-multi-lang-v1_0/espeak-ng-data
+		modelDir := filepath.Dir(cfg.ModelPath)
+		potentialDataDir := filepath.Join(modelDir, "espeak-ng-data")
+		if _, err := os.Stat(potentialDataDir); err == nil {
+			dataDir = potentialDataDir
+		}
+	}
+	if dataDir != "" {
+		kokoroConfig.DataDir = dataDir
+	}
+	
+	// 设置DictDir（可选，用于字典文件）
+	if cfg.DictDir != "" {
+		kokoroConfig.DictDir = cfg.DictDir
+	}
+	
+	// 设置Lexicon（可选，用于多语言支持）
+	// 如果配置中有多个lexicon文件，用逗号分隔
+	if cfg.Lexicon != "" {
+		kokoroConfig.Lexicon = cfg.Lexicon
+	} else if cfg.ModelPath != "" {
+		// 尝试从model路径推断lexicon路径
+		modelDir := filepath.Dir(cfg.ModelPath)
+		var lexiconPaths []string
+		for _, name := range []string{"lexicon-us-en.txt", "lexicon-zh.txt"} {
+			potentialLexicon := filepath.Join(modelDir, name)
+			if _, err := os.Stat(potentialLexicon); err == nil {
+				lexiconPaths = append(lexiconPaths, potentialLexicon)
+			}
+		}
+		if len(lexiconPaths) > 0 {
+			kokoroConfig.Lexicon = strings.Join(lexiconPaths, ",")
+		}
+	}
+	
 	ttsConfig := sherpa.OfflineTtsConfig{
 		Model: sherpa.OfflineTtsModelConfig{
-			Kokoro: sherpa.OfflineTtsKokoroModelConfig{
-				Model: cfg.ModelPath,
-			},
+			Kokoro:     kokoroConfig,
 			Provider:   config.GetProvider(&cfg.Provider),
 			NumThreads: cfg.Provider.NumThreads,
 			Debug:      0,

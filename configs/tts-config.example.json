@@ -5,10 +5,10 @@
     "read_timeout": 20
   },
   "tts": {
-    "model_path": "/app/models/tts/model.onnx",
-    "voices_path": "/app/models/tts/voices.bin",
-    "tokens_path": "/app/models/tts/tokens.txt",
-    "data_dir": "/app/models/tts/espeak-ng-data",
+    "model_path": "models/tts/kokoro-multi-lang-v1_0/model.onnx",
+    "voices_path": "models/tts/kokoro-multi-lang-v1_0/voices.bin",
+    "tokens_path": "models/tts/kokoro-multi-lang-v1_0/tokens.txt",
+    "data_dir": "models/tts/kokoro-multi-lang-v1_0/espeak-ng-data",
     "provider": {
       "provider": "cpu",
       "device_id": 0,

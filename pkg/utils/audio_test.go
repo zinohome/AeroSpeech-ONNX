@@ -128,3 +128,102 @@ func TestRoundTripConversion(t *testing.T) {
 	}
 }
 
+func TestSamplesInt16ToFloatOddLength(t *testing.T) {
+	// 测试奇数长度的输入
+	input := []byte{0x00, 0x00, 0xFF}
+	result := SamplesInt16ToFloat(input)
+	if result != nil {
+		t.Error("Expected nil for odd-length input")
+	}
+}
+
+func TestConvertPCM16ToFloat32(t *testing.T) {
+	input := []byte{0x00, 0x00, 0xFF, 0x7F}
+	result := ConvertPCM16ToFloat32(input)
+	if len(result) != 2 {
+		t.Errorf("Expected 2 samples, got %d", len(result))
+	}
+}
+
+func TestConvertFloat32ToPCM16(t *testing.T) {
+	input := []float32{0.0, 1.0, -1.0}
+	result := ConvertFloat32ToPCM16(input)
+	if len(result) != 6 { // 3 samples * 2 bytes
+		t.Errorf("Expected 6 bytes, got %d", len(result))
+	}
+}
+
+func TestResampleAudio(t *testing.T) {
+	tests := []struct {
+		name     string
+		samples  []float32
+		fromRate int
+		toRate   int
+		check    func([]float32) bool
+	}{
+		{
+			name:     "same rate",
+			samples:  []float32{0.0, 0.5, 1.0},
+			fromRate: 16000,
+			toRate:   16000,
+			check: func(result []float32) bool {
+				return len(result) == 3
+			},
+		},
+		{
+			name:     "upsample",
+			samples:  []float32{0.0, 1.0},
+			fromRate: 16000,
+			toRate:   32000,
+			check: func(result []float32) bool {
+				return len(result) >= 2 && len(result) <= 4
+			},
+		},
+		{
+			name:     "downsample",
+			samples:  []float32{0.0, 0.5, 1.0, 0.5, 0.0},
+			fromRate: 32000,
+			toRate:   16000,
+			check: func(result []float32) bool {
+				return len(result) >= 2 && len(result) <= 5
+			},
+		},
+		{
+			name:     "empty input",
+			samples:  []float32{},
+			fromRate: 16000,
+			toRate:   32000,
+			check: func(result []float32) bool {
+				return len(result) == 0
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ResampleAudio(tt.samples, tt.fromRate, tt.toRate)
+			if !tt.check(result) {
+				t.Errorf("ResampleAudio() check failed for %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestSamplesFloatToInt16Clamping(t *testing.T) {
+	// 测试超出范围的值会被限制
+	input := []float32{-2.0, -1.0, 0.0, 1.0, 2.0}
+	result := SamplesFloatToInt16(input)
+	
+	if len(result) != 10 { // 5 samples * 2 bytes
+		t.Errorf("Expected 10 bytes, got %d", len(result))
+	}
+	
+	// 验证值被限制在[-1.0, 1.0]范围内
+	converted := SamplesInt16ToFloat(result)
+	for i, val := range converted {
+		if val < -1.0 || val > 1.0 {
+			t.Errorf("Sample %d: value %f is out of range [-1.0, 1.0]", i, val)
+		}
+	}
+}
+

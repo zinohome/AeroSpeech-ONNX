@@ -160,3 +160,265 @@ func containsSubstring(s, substr string) bool {
 	return false
 }
 
+func TestSetLevel(t *testing.T) {
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "debug",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+	logger.SetLevel(DebugLevel)
+
+	logger.Debug("debug message")
+	if buf.Len() == 0 {
+		t.Error("Debug message should be logged at debug level")
+	}
+
+	buf.Reset()
+	logger.SetLevel(InfoLevel)
+	logger.Debug("debug message")
+	if buf.Len() > 0 {
+		t.Error("Debug message should not be logged at info level")
+	}
+}
+
+func TestSetOutput(t *testing.T) {
+	var buf1, buf2 bytes.Buffer
+
+	config := Config{
+		Level:  "info",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf1)
+	logger.Info("message 1")
+
+	if buf1.Len() == 0 {
+		t.Error("Message should be written to buf1")
+	}
+
+	logger.SetOutput(&buf2)
+	logger.Info("message 2")
+
+	if buf2.Len() == 0 {
+		t.Error("Message should be written to buf2")
+	}
+}
+
+func TestDebugf(t *testing.T) {
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "debug",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+	logger.SetLevel(DebugLevel)
+
+	logger.Debugf("test message: %s", "value")
+	if buf.Len() == 0 {
+		t.Error("Debugf message should be logged")
+	}
+}
+
+func TestInfof(t *testing.T) {
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "info",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+
+	logger.Infof("test message: %d", 123)
+	if buf.Len() == 0 {
+		t.Error("Infof message should be logged")
+	}
+}
+
+func TestWarnf(t *testing.T) {
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "info",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+
+	logger.Warnf("test message: %f", 1.23)
+	if buf.Len() == 0 {
+		t.Error("Warnf message should be logged")
+	}
+}
+
+func TestErrorf(t *testing.T) {
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "info",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+
+	logger.Errorf("test message: %v", "error")
+	if buf.Len() == 0 {
+		t.Error("Errorf message should be logged")
+	}
+}
+
+func TestInitLoggerWithFile(t *testing.T) {
+	tmpFile := "/tmp/test-logger-file.log"
+	defer os.Remove(tmpFile)
+
+	config := Config{
+		Level:    "info",
+		Format:   "text",
+		Output:   "file",
+		FilePath: tmpFile,
+		MaxSize:  100,
+		MaxBackups: 5,
+		MaxAge:   30,
+		Compress: false,
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.Info("test message")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(tmpFile); os.IsNotExist(err) {
+		t.Error("Log file was not created")
+	}
+}
+
+func TestInitLoggerWithBoth(t *testing.T) {
+	tmpFile := "/tmp/test-logger-both.log"
+	defer os.Remove(tmpFile)
+
+	config := Config{
+		Level:    "info",
+		Format:   "text",
+		Output:   "both",
+		FilePath: tmpFile,
+		MaxSize:  100,
+		MaxBackups: 5,
+		MaxAge:   30,
+		Compress: false,
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.Info("test message")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(tmpFile); os.IsNotExist(err) {
+		t.Error("Log file was not created")
+	}
+}
+
+func TestInitLoggerInvalidLevel(t *testing.T) {
+	config := Config{
+		Level:  "invalid",
+		Format: "text",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() should not fail with invalid level: %v", err)
+	}
+
+	logger := GetLogger()
+	if logger == nil {
+		t.Fatal("GetLogger() returned nil")
+	}
+}
+
+func TestEscapeJSON(t *testing.T) {
+	// 测试JSON转义功能（通过日志输出）
+	var buf bytes.Buffer
+
+	config := Config{
+		Level:  "info",
+		Format: "json",
+		Output: "console",
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		t.Fatalf("InitLogger() error = %v", err)
+	}
+
+	logger := GetLogger()
+	logger.SetOutput(&buf)
+
+	// 测试包含特殊字符的消息
+	logger.Info("test message with \"quotes\" and\nnewline")
+	
+	output := buf.String()
+	if len(output) == 0 {
+		t.Error("JSON log should be written")
+	}
+	
+	// 验证JSON格式
+	if !contains(output, "{") || !contains(output, "timestamp") {
+		t.Error("Output should be valid JSON")
+	}
+}
+

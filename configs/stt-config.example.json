@@ -5,8 +5,8 @@
     "read_timeout": 20
   },
   "asr": {
-    "model_path": "/app/models/asr/model.onnx",
-    "tokens_path": "/app/models/asr/tokens.txt",
+    "model_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx",
+    "tokens_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
     "language": "zh",
     "provider": {
       "provider": "cpu",
