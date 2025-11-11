@@ -37,6 +37,49 @@
 go mod tidy
 ```
 
+### 编译二进制文件
+
+#### 方式1: 使用编译脚本（推荐）
+
+```bash
+# 编译所有服务到 bin/ 目录
+./scripts/build.sh
+```
+
+编译后的二进制文件位于 `bin/` 目录：
+- `bin/stt-server` - STT服务
+- `bin/tts-server` - TTS服务
+- `bin/speech-server` - 统一服务
+
+#### 方式2: 手动编译
+
+```bash
+# 创建 bin 目录
+mkdir -p bin
+
+# 编译 STT 服务
+go build -o bin/stt-server ./cmd/stt-server
+
+# 编译 TTS 服务
+go build -o bin/tts-server ./cmd/tts-server
+
+# 编译统一服务
+go build -o bin/speech-server ./cmd/speech-server
+```
+
+#### 运行编译后的二进制文件
+
+```bash
+# STT 服务
+./bin/stt-server
+
+# TTS 服务
+./bin/tts-server
+
+# 统一服务
+./bin/speech-server
+```
+
 ### 配置
 
 #### 统一服务配置

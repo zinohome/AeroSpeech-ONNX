@@ -271,3 +271,188 @@ func TestTTSHandler_GetStats(t *testing.T) {
 	}
 }
 
+func TestTTSHandler_SynthesizeWithDefaultSpeed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{
+		synthesizeResult: []byte("fake audio data"),
+	}
+
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/synthesize", handler.Synthesize)
+
+	// 不提供speed，应该使用默认值1.0
+	reqBody := `{"text": "测试文本"}`
+	req := httptest.NewRequest("POST", "/synthesize", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestTTSHandler_SynthesizeWithCustomSpeed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{
+		synthesizeResult: []byte("fake audio data"),
+	}
+
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/synthesize", handler.Synthesize)
+
+	reqBody := `{"text": "测试文本", "speed": 1.5}`
+	req := httptest.NewRequest("POST", "/synthesize", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestTTSHandler_SynthesizeWithCustomSpeakerID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{
+		synthesizeResult: []byte("fake audio data"),
+	}
+
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/synthesize", handler.Synthesize)
+
+	reqBody := `{"text": "测试文本", "speaker_id": 45}`
+	req := httptest.NewRequest("POST", "/synthesize", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestTTSHandler_BatchSynthesizeWithErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{
+		synthesizeError: utils.NewAppError(
+			utils.ErrCodeSynthesisError,
+			"synthesis failed",
+			"test error",
+			nil,
+		),
+	}
+
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/batch", handler.BatchSynthesize)
+
+	reqBody := `{"texts": [{"text": "测试文本1"}, {"text": "测试文本2"}]}`
+	req := httptest.NewRequest("POST", "/batch", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestTTSHandler_BatchSynthesizeEmptyTexts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{}
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/batch", handler.BatchSynthesize)
+
+	reqBody := `{"texts": []}`
+	req := httptest.NewRequest("POST", "/batch", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestTTSHandler_GetConfigWithGPU(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{}
+	cfg := &config.TTSConfig{
+		Audio: config.AudioConfig{
+			SampleRate: 24000,
+		},
+		TTS: config.TTSModelConfig{
+			Provider: config.ProviderConfig{
+				Provider:   "cuda",
+				DeviceID:  0,
+				NumThreads: 1,
+			},
+		},
+	}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.GET("/config", handler.GetConfig)
+
+	req := httptest.NewRequest("GET", "/config", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestTTSHandler_GetStatsWithNilStats(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockTTSManager{
+		stats:      nil,
+		avgLatency: nil,
+		poolUsage:  0.0,
+		poolStats:  nil,
+	}
+
+	cfg := &config.TTSConfig{}
+
+	handler := NewTTSHandler(manager, cfg)
+
+	router := gin.New()
+	router.GET("/stats", handler.GetStats)
+
+	req := httptest.NewRequest("GET", "/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+

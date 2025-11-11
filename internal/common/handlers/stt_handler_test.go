@@ -262,3 +262,136 @@ func TestSTTHandler_GetStats(t *testing.T) {
 	}
 }
 
+func TestSTTHandler_RecognizeEmptyFile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockSTTManager{}
+	cfg := &config.STTConfig{}
+
+	handler := NewSTTHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/recognize", handler.Recognize)
+
+	// 创建空的multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/recognize", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestSTTHandler_BatchRecognizeEmptyFiles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockSTTManager{
+		transcribeResult: "测试文本",
+	}
+	cfg := &config.STTConfig{}
+
+	handler := NewSTTHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/batch", handler.BatchRecognize)
+
+	reqBody := `{"files": []}`
+	req := httptest.NewRequest("POST", "/batch", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestSTTHandler_BatchRecognizeFileNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockSTTManager{
+		transcribeResult: "测试文本",
+	}
+	cfg := &config.STTConfig{}
+
+	handler := NewSTTHandler(manager, cfg)
+
+	router := gin.New()
+	router.POST("/batch", handler.BatchRecognize)
+
+	reqBody := `{"files": ["/nonexistent/file.wav"]}`
+	req := httptest.NewRequest("POST", "/batch", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// 应该返回200，但结果中可能包含错误
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestSTTHandler_GetConfigWithGPU(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockSTTManager{}
+	cfg := &config.STTConfig{
+		Audio: config.AudioConfig{
+			SampleRate: 16000,
+			ChunkSize:  4096,
+		},
+		ASR: config.ASRConfig{
+			Provider: config.ProviderConfig{
+				Provider:   "cuda",
+				DeviceID:  0,
+				NumThreads: 1,
+			},
+		},
+	}
+
+	handler := NewSTTHandler(manager, cfg)
+
+	router := gin.New()
+	router.GET("/config", handler.GetConfig)
+
+	req := httptest.NewRequest("GET", "/config", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestSTTHandler_GetStatsWithNilStats(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := &mockSTTManager{
+		stats:      nil,
+		avgLatency: nil,
+		poolUsage:  0.0,
+		poolStats:  nil,
+	}
+
+	cfg := &config.STTConfig{}
+
+	handler := NewSTTHandler(manager, cfg)
+
+	router := gin.New()
+	router.GET("/stats", handler.GetStats)
+
+	req := httptest.NewRequest("GET", "/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+}
+

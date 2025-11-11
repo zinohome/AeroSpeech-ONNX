@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  # 统一服务（推荐用于开发/测试环境）
+  speech-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.speech
+    container_name: aerospeech-unified
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs:/app/configs
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - SPEECH_CONFIG_PATH=/app/configs/speech-config.json
+    restart: unless-stopped
+    networks:
+      - aerospeech-network
+
+  # STT服务（分离模式，推荐用于生产环境）
   stt-server:
     build:
       context: .
@@ -17,7 +36,10 @@ services:
     restart: unless-stopped
     networks:
       - aerospeech-network
+    profiles:
+      - separated
 
+  # TTS服务（分离模式，推荐用于生产环境）
   tts-server:
     build:
       context: .
@@ -34,6 +56,8 @@ services:
     restart: unless-stopped
     networks:
       - aerospeech-network
+    profiles:
+      - separated
 
 networks:
   aerospeech-network:

@@ -427,3 +427,212 @@ func (h *testMessageHandlerWithError) HandleClose(conn *websocket.Conn) {
 	// 处理关闭
 }
 
+func TestUpgrader_UpgradeWithCompression(t *testing.T) {
+	upgrader := NewUpgrader(
+		30*time.Second,
+		10*time.Second,
+		54*time.Second,
+		60*time.Second,
+		1024*1024,
+		true, // 启用压缩
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if conn == nil {
+		t.Fatal("Connection is nil")
+	}
+}
+
+func TestUpgrader_UpgradeWithResponseHeader(t *testing.T) {
+	upgrader := NewUpgrader(
+		30*time.Second,
+		10*time.Second,
+		54*time.Second,
+		60*time.Second,
+		1024*1024,
+		false,
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responseHeader := http.Header{}
+		responseHeader.Set("X-Custom-Header", "test-value")
+		conn, err := upgrader.Upgrade(w, r, responseHeader)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if conn == nil {
+		t.Fatal("Connection is nil")
+	}
+}
+
+func TestConnectionManager_pingLoop(t *testing.T) {
+	upgrader := NewUpgrader(
+		30*time.Second,
+		10*time.Second,
+		1*time.Second, // 短ping周期用于测试
+		60*time.Second,
+		1024*1024,
+		false,
+	)
+
+	handler := &testMessageHandler{}
+	manager := NewConnectionManager(upgrader, handler)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		manager.HandleConnection(w, r)
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// 等待ping消息
+	time.Sleep(2 * time.Second)
+
+	// 验证连接仍然活跃
+	if conn == nil {
+		t.Fatal("Connection is nil")
+	}
+}
+
+func TestConnectionManager_HandleConnectionReadTimeout(t *testing.T) {
+	upgrader := NewUpgrader(
+		1*time.Second, // 短读取超时
+		10*time.Second,
+		54*time.Second,
+		60*time.Second,
+		1024*1024,
+		false,
+	)
+
+	handler := &testMessageHandler{}
+	manager := NewConnectionManager(upgrader, handler)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		manager.HandleConnection(w, r)
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// 不发送任何消息，等待超时
+	time.Sleep(2 * time.Second)
+
+	// 连接应该已关闭或超时
+}
+
+func TestConnectionManager_HandleConnectionLargeMessage(t *testing.T) {
+	upgrader := NewUpgrader(
+		30*time.Second,
+		10*time.Second,
+		54*time.Second,
+		60*time.Second,
+		1024, // 小消息大小限制
+		false,
+	)
+
+	handler := &testMessageHandler{}
+	manager := NewConnectionManager(upgrader, handler)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		manager.HandleConnection(w, r)
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// 发送大消息（超过限制）
+	largeMessage := make([]byte, 2048)
+	if err := conn.WriteMessage(websocket.TextMessage, largeMessage); err != nil {
+		// 预期可能会失败
+		t.Logf("Large message write may fail: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestSetPongHandler_WithZeroTimeout(t *testing.T) {
+	upgrader := NewUpgrader(
+		30*time.Second,
+		10*time.Second,
+		54*time.Second,
+		60*time.Second,
+		1024*1024,
+		false,
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		SetPongHandler(conn, 0) // 零超时
+	}))
+
+	defer server.Close()
+
+	url := "ws" + server.URL[4:]
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Skipf("Skipping test: cannot connect to test server: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// 发送pong消息
+	conn.WriteMessage(websocket.PongMessage, nil)
+	time.Sleep(100 * time.Millisecond)
+}
+

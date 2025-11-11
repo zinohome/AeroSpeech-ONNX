@@ -46,6 +46,11 @@ dist/
 build/
 bin/
 
+# Compiled binaries
+stt-server
+tts-server
+speech-server
+
 # Temporary files
 tmp/
 temp/

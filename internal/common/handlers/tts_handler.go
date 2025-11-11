@@ -95,6 +95,19 @@ func (h *TTSHandler) BatchSynthesize(c *gin.Context) {
 		return
 	}
 
+	// 验证文本列表不为空
+	if len(req.Texts) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "invalid request",
+			"error": gin.H{
+				"type":    "INVALID_PARAMS",
+				"details": "texts list cannot be empty",
+			},
+		})
+		return
+	}
+
 	// 批量合成（简化实现）
 	results := make([]map[string]interface{}, 0, len(req.Texts))
 	for _, textReq := range req.Texts {
