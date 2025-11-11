@@ -39,7 +39,19 @@ go mod tidy
 
 ### 配置
 
-复制配置文件模板：
+#### 统一服务配置
+
+```bash
+cp configs/speech-config.example.json configs/speech-config.json
+```
+
+编辑 `configs/speech-config.json`，设置：
+- `mode`: `"unified"` 或 `"separated"`
+- `stt`: STT模型配置
+- `tts`: TTS模型配置
+- `server`: 服务器配置
+
+#### 分离服务配置
 
 ```bash
 cp configs/stt-config.example.json configs/stt-config.json
@@ -50,20 +62,50 @@ cp configs/tts-config.example.json configs/tts-config.json
 
 ### 运行服务
 
-#### STT 服务
+#### 方式1: 统一服务（推荐用于开发/测试环境）
+
+统一服务将STT和TTS合并到一个端口，简化部署：
 
 ```bash
-go run cmd/stt-server/main.go
+# 复制统一配置文件
+cp configs/speech-config.example.json configs/speech-config.json
+
+# 编辑配置文件，设置模型路径和Provider
+
+# 运行统一服务
+go run cmd/speech-server/main.go
 ```
 
-#### TTS 服务
+**统一服务特性**:
+- 单一端口（默认8080）
+- 同时支持STT和TTS
+- 路由区分：`/api/v1/stt/*` 和 `/api/v1/tts/*`
+- WebSocket：`/ws/stt` 和 `/ws/tts`
+
+**访问地址**:
+- STT 测试页面: http://localhost:8080/stt
+- TTS 测试页面: http://localhost:8080/tts
+- 监控面板: http://localhost:8080/monitor
+
+#### 方式2: 分离服务（推荐用于生产环境）
+
+分离服务将STT和TTS分别部署，提供更好的故障隔离和扩展性：
 
 ```bash
+# STT 服务
+go run cmd/stt-server/main.go
+
+# TTS 服务（另一个终端）
 go run cmd/tts-server/main.go
 ```
 
-### 访问测试界面
+**分离服务特性**:
+- 独立端口（STT: 8080, TTS: 8081）
+- 故障隔离
+- 独立扩展
+- 资源优化
 
+**访问地址**:
 - STT 测试页面: http://localhost:8080
 - TTS 测试页面: http://localhost:8081
 - 监控面板: http://localhost:8080/monitor
@@ -73,8 +115,9 @@ go run cmd/tts-server/main.go
 ```
 AeroSpeech-ONNX/
 ├── cmd/                    # 服务入口
-│   ├── stt-server/         # STT服务入口
-│   └── tts-server/         # TTS服务入口
+│   ├── speech-server/      # 统一服务入口（支持两种模式）
+│   ├── stt-server/         # STT服务入口（分离模式）
+│   └── tts-server/         # TTS服务入口（分离模式）
 ├── internal/               # 内部代码
 │   ├── common/             # 共享代码
 │   │   ├── config/         # 配置管理

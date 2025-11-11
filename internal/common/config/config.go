@@ -99,6 +99,18 @@ type TTSConfig struct {
 	Logging   LoggingConfig   `mapstructure:"logging" json:"logging"`
 }
 
+// UnifiedConfig 统一配置（同时支持STT和TTS）
+type UnifiedConfig struct {
+	Mode      string          `mapstructure:"mode" json:"mode"` // "unified" 或 "separated"
+	Server    ServerConfig    `mapstructure:"server" json:"server"`
+	STT       *ASRConfig      `mapstructure:"stt" json:"stt,omitempty"`
+	TTS       *TTSModelConfig `mapstructure:"tts" json:"tts,omitempty"`
+	Audio     AudioConfig     `mapstructure:"audio" json:"audio"`
+	WebSocket WebSocketConfig `mapstructure:"websocket" json:"websocket"`
+	Session   SessionConfig   `mapstructure:"session" json:"session"`
+	Logging   LoggingConfig   `mapstructure:"logging" json:"logging"`
+}
+
 // GlobalConfig 全局配置（STT或TTS）
 var GlobalConfig interface{}
 
@@ -390,5 +402,204 @@ func GetDeviceID(provider *ProviderConfig) int {
 // GetNumThreads 获取线程数
 func GetNumThreads(provider *ProviderConfig) int {
 	return provider.NumThreads
+}
+
+// LoadUnifiedConfig 加载统一配置
+func LoadUnifiedConfig(configPath string) (*UnifiedConfig, error) {
+	viper.SetConfigFile(configPath)
+	viper.SetConfigType("json")
+
+	// 支持环境变量
+	viper.SetEnvPrefix("SPEECH")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config UnifiedConfig
+	if err := viper.Unmarshal(&config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// 设置默认值
+	setUnifiedDefaults(&config)
+
+	// 验证配置
+	if err := validateUnifiedConfig(&config); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	// Provider自动选择
+	if config.STT != nil {
+		if err := resolveProvider(&config.STT.Provider); err != nil {
+			return nil, fmt.Errorf("failed to resolve STT provider: %w", err)
+		}
+	}
+	if config.TTS != nil {
+		if err := resolveProvider(&config.TTS.Provider); err != nil {
+			return nil, fmt.Errorf("failed to resolve TTS provider: %w", err)
+		}
+	}
+
+	GlobalConfig = &config
+	return &config, nil
+}
+
+// setUnifiedDefaults 设置统一配置默认值
+func setUnifiedDefaults(config *UnifiedConfig) {
+	if config.Mode == "" {
+		config.Mode = "unified"
+	}
+
+	if config.Server.Host == "" {
+		config.Server.Host = "0.0.0.0"
+	}
+	if config.Server.Port == 0 {
+		config.Server.Port = 8080
+	}
+	if config.Server.ReadTimeout == 0 {
+		config.Server.ReadTimeout = 20
+	}
+
+	// STT默认值
+	if config.STT != nil {
+		if config.STT.Provider.Provider == "" {
+			config.STT.Provider.Provider = "cpu"
+		}
+		if config.STT.Provider.NumThreads == 0 {
+			if config.STT.Provider.Provider == "cuda" {
+				config.STT.Provider.NumThreads = 1
+			} else {
+				config.STT.Provider.NumThreads = runtime.NumCPU()
+			}
+		}
+	}
+
+	// TTS默认值
+	if config.TTS != nil {
+		if config.TTS.Provider.Provider == "" {
+			config.TTS.Provider.Provider = "cpu"
+		}
+		if config.TTS.Provider.NumThreads == 0 {
+			if config.TTS.Provider.Provider == "cuda" {
+				config.TTS.Provider.NumThreads = 1
+			} else {
+				config.TTS.Provider.NumThreads = 4
+			}
+		}
+	}
+
+	// 音频配置默认值
+	if config.Audio.SampleRate == 0 {
+		config.Audio.SampleRate = 16000 // STT默认采样率
+	}
+	if config.Audio.ChunkSize == 0 {
+		config.Audio.ChunkSize = 4096
+	}
+	if config.Audio.FeatureDim == 0 {
+		config.Audio.FeatureDim = 80
+	}
+	if config.Audio.NormalizeFactor == 0 {
+		config.Audio.NormalizeFactor = 32768.0
+	}
+
+	// WebSocket配置默认值
+	if config.WebSocket.ReadTimeout == 0 {
+		config.WebSocket.ReadTimeout = 20
+	}
+	if config.WebSocket.MaxMessageSize == 0 {
+		config.WebSocket.MaxMessageSize = 2097152 // 2MB
+	}
+	if config.WebSocket.ReadBufferSize == 0 {
+		config.WebSocket.ReadBufferSize = 1024
+	}
+	if config.WebSocket.WriteBufferSize == 0 {
+		config.WebSocket.WriteBufferSize = 1024
+	}
+
+	// 会话配置默认值
+	if config.Session.SendQueueSize == 0 {
+		config.Session.SendQueueSize = 500
+	}
+	if config.Session.MaxSendErrors == 0 {
+		config.Session.MaxSendErrors = 10
+	}
+
+	// 日志配置默认值
+	if config.Logging.Level == "" {
+		config.Logging.Level = "info"
+	}
+	if config.Logging.Format == "" {
+		config.Logging.Format = "text"
+	}
+	if config.Logging.Output == "" {
+		config.Logging.Output = "both"
+	}
+}
+
+// validateUnifiedConfig 验证统一配置
+func validateUnifiedConfig(config *UnifiedConfig) error {
+	// 验证模式
+	if config.Mode != "unified" && config.Mode != "separated" {
+		return fmt.Errorf("invalid mode: %s, must be 'unified' or 'separated'", config.Mode)
+	}
+
+	// 验证STT配置
+	if config.STT != nil {
+		if config.STT.ModelPath == "" {
+			return fmt.Errorf("stt.model_path is required")
+		}
+		if config.STT.TokensPath == "" {
+			return fmt.Errorf("stt.tokens_path is required")
+		}
+
+		// 检查模型文件是否存在
+		if _, err := os.Stat(config.STT.ModelPath); os.IsNotExist(err) {
+			return fmt.Errorf("stt model file not found: %s", config.STT.ModelPath)
+		}
+		if _, err := os.Stat(config.STT.TokensPath); os.IsNotExist(err) {
+			return fmt.Errorf("stt tokens file not found: %s", config.STT.TokensPath)
+		}
+
+		// 验证Provider
+		if config.STT.Provider.Provider != "cpu" &&
+			config.STT.Provider.Provider != "cuda" &&
+			config.STT.Provider.Provider != "auto" {
+			return fmt.Errorf("invalid stt provider: %s, must be cpu, cuda, or auto", config.STT.Provider.Provider)
+		}
+	}
+
+	// 验证TTS配置
+	if config.TTS != nil {
+		if config.TTS.ModelPath == "" {
+			return fmt.Errorf("tts.model_path is required")
+		}
+
+		// 检查模型文件是否存在
+		if _, err := os.Stat(config.TTS.ModelPath); os.IsNotExist(err) {
+			return fmt.Errorf("tts model file not found: %s", config.TTS.ModelPath)
+		}
+
+		// 验证Provider
+		if config.TTS.Provider.Provider != "cpu" &&
+			config.TTS.Provider.Provider != "cuda" &&
+			config.TTS.Provider.Provider != "auto" {
+			return fmt.Errorf("invalid tts provider: %s, must be cpu, cuda, or auto", config.TTS.Provider.Provider)
+		}
+	}
+
+	// 统一模式必须同时配置STT和TTS
+	if config.Mode == "unified" {
+		if config.STT == nil {
+			return fmt.Errorf("stt config is required in unified mode")
+		}
+		if config.TTS == nil {
+			return fmt.Errorf("tts config is required in unified mode")
+		}
+	}
+
+	return nil
 }
 

@@ -1,0 +1,59 @@
+{
+  "mode": "unified",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "read_timeout": 20
+  },
+  "stt": {
+    "model_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx",
+    "tokens_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
+    "language": "zh",
+    "provider": {
+      "provider": "cpu",
+      "device_id": 0,
+      "num_threads": 4
+    },
+    "debug": false
+  },
+  "tts": {
+    "model_path": "models/tts/kokoro-multi-lang-v1_0/model.onnx",
+    "voices_path": "models/tts/kokoro-multi-lang-v1_0/voices.bin",
+    "tokens_path": "models/tts/kokoro-multi-lang-v1_0/tokens.txt",
+    "data_dir": "models/tts/kokoro-multi-lang-v1_0/espeak-ng-data",
+    "provider": {
+      "provider": "cpu",
+      "device_id": 0,
+      "num_threads": 4
+    },
+    "debug": false
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "feature_dim": 80,
+    "chunk_size": 4096,
+    "normalize_factor": 32768.0
+  },
+  "websocket": {
+    "read_timeout": 20,
+    "max_message_size": 2097152,
+    "read_buffer_size": 1024,
+    "write_buffer_size": 1024,
+    "enable_compression": false
+  },
+  "session": {
+    "send_queue_size": 500,
+    "max_send_errors": 10
+  },
+  "logging": {
+    "level": "info",
+    "format": "text",
+    "output": "both",
+    "file_path": "/app/logs/speech.log",
+    "max_size": 100,
+    "max_backups": 5,
+    "max_age": 30,
+    "compress": false
+  }
+}
+
