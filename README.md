@@ -126,9 +126,18 @@ go run cmd/speech-server/main.go
 - WebSocket：`/ws/stt` 和 `/ws/tts`
 
 **访问地址**:
-- STT 测试页面: http://localhost:8080/stt
-- TTS 测试页面: http://localhost:8080/tts
-- 监控面板: http://localhost:8080/monitor
+- **Web界面**:
+  - STT 测试页面: http://localhost:8080/stt
+  - TTS 测试页面: http://localhost:8080/tts
+  - 监控面板: http://localhost:8080/monitor
+- **REST API**:
+  - STT API: http://localhost:8080/api/v1/stt/*
+  - TTS API: http://localhost:8080/api/v1/tts/*
+  - 健康检查: http://localhost:8080/api/v1/health
+- **WebSocket**:
+  - STT WebSocket: ws://localhost:8080/ws/stt
+  - TTS WebSocket: ws://localhost:8080/ws/tts
+  - 兼容路由: ws://localhost:8080/ws?type=stt 或 ws://localhost:8080/ws?type=tts
 
 #### 方式2: 分离服务（推荐用于生产环境）
 
@@ -230,38 +239,84 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
-测试覆盖率要求：≥80%
+**测试覆盖率要求**: ≥80%
+
+**当前测试覆盖率**:
+- WebSocket模块: 82.4% ✅
+- Handlers模块: 85.0% ✅
+- 整体覆盖率: 持续提升中
 
 ## 部署
 
 ### Docker 部署
 
+#### 方式1: 统一服务（推荐用于开发/测试环境）
+
 ```bash
-# 构建镜像
+# 使用 docker-compose 启动统一服务（默认）
+docker-compose up -d speech-server
+
+# 或者手动构建
+docker build -f Dockerfile.speech -t aerospeech-unified .
+docker run -d -p 8080:8080 \
+  -v $(pwd)/configs:/app/configs \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/logs:/app/logs \
+  -e SPEECH_CONFIG_PATH=/app/configs/speech-config.json \
+  aerospeech-unified
+```
+
+#### 方式2: 分离服务（推荐用于生产环境）
+
+```bash
+# 使用 docker-compose 启动分离服务
+docker-compose --profile separated up -d
+
+# 或者手动构建
 docker build -f Dockerfile.stt -t aerospeech-stt .
 docker build -f Dockerfile.tts -t aerospeech-tts .
 
-# 使用 docker-compose
-docker-compose up -d
+docker run -d -p 8080:8080 \
+  -v $(pwd)/configs:/app/configs \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/logs:/app/logs \
+  aerospeech-stt
+
+docker run -d -p 8081:8081 \
+  -v $(pwd)/configs:/app/configs \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/logs:/app/logs \
+  aerospeech-tts
 ```
 
-详细部署文档请参考部署文档（待完善）。
+详细部署文档请参考 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## 文档
 
 完整的项目文档位于 `docs/` 目录：
 
+### 核心文档
 - [项目概述](docs/01-项目概述.md)
 - [架构设计](docs/02-架构设计.md)
 - [WebSocket接口设计](docs/03-websocket接口设计.md)
 - [API设计](docs/04-API设计.md)
+- [部署文档](docs/DEPLOYMENT.md)
+- [统一服务使用说明](docs/统一服务使用说明.md)
+
+### 开发文档
 - [实施路线图](docs/05-实施路线图.md)
 - [开发规范](docs/06-开发规范.md)
 - [测试规范](docs/07-测试规范.md)
 - [开发流程管控](docs/08-开发流程管控.md)
 - [测试计划](docs/09-测试计划.md)
+
+### 技术文档
 - [Sherpa-ONNX技术分析](docs/10-sherpa-onnx技术分析.md)
 - [GPU配置示例](docs/11-GPU配置示例.md)
+- [架构设计分析-端口合并可行性](docs/架构设计分析-端口合并可行性.md)
+
+### 项目状态
+- [项目完整度分析](docs/项目完整度分析-最新.md)
 
 ## 许可证
 

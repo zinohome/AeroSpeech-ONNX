@@ -99,17 +99,22 @@ func InitLogger(config Config) error {
 			// 确保目录存在
 			dir := filepath.Dir(config.FilePath)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				return fmt.Errorf("failed to create log directory: %w", err)
+				// 如果无法创建目录，回退到控制台输出
+				if config.Output == "file" {
+					// 如果只配置了文件输出，则改为控制台输出
+					writers = append(writers, os.Stdout)
+				}
+				// 如果配置了both，则只使用控制台输出，忽略文件输出
+			} else {
+				fileWriter := &lumberjack.Logger{
+					Filename:   config.FilePath,
+					MaxSize:    config.MaxSize,
+					MaxBackups: config.MaxBackups,
+					MaxAge:     config.MaxAge,
+					Compress:   config.Compress,
+				}
+				writers = append(writers, fileWriter)
 			}
-
-			fileWriter := &lumberjack.Logger{
-				Filename:   config.FilePath,
-				MaxSize:    config.MaxSize,
-				MaxBackups: config.MaxBackups,
-				MaxAge:     config.MaxAge,
-				Compress:   config.Compress,
-			}
-			writers = append(writers, fileWriter)
 		}
 	}
 

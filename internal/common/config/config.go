@@ -249,7 +249,10 @@ func setSTTDefaults(config *STTConfig) {
 		config.Logging.Format = "text"
 	}
 	if config.Logging.Output == "" {
-		config.Logging.Output = "both"
+		config.Logging.Output = "console" // 默认只输出到控制台，避免文件路径问题
+	}
+	if config.Logging.FilePath == "" && (config.Logging.Output == "file" || config.Logging.Output == "both") {
+		config.Logging.FilePath = "logs/stt.log" // 默认相对路径
 	}
 }
 
@@ -296,6 +299,15 @@ func setTTSDefaults(config *TTSConfig) {
 
 	if config.Logging.Level == "" {
 		config.Logging.Level = "info"
+	}
+	if config.Logging.Format == "" {
+		config.Logging.Format = "text"
+	}
+	if config.Logging.Output == "" {
+		config.Logging.Output = "console" // 默认只输出到控制台，避免文件路径问题
+	}
+	if config.Logging.FilePath == "" && (config.Logging.Output == "file" || config.Logging.Output == "both") {
+		config.Logging.FilePath = "logs/tts.log" // 默认相对路径
 	}
 }
 
@@ -535,7 +547,10 @@ func setUnifiedDefaults(config *UnifiedConfig) {
 		config.Logging.Format = "text"
 	}
 	if config.Logging.Output == "" {
-		config.Logging.Output = "both"
+		config.Logging.Output = "console" // 默认只输出到控制台，避免文件路径问题
+	}
+	if config.Logging.FilePath == "" && (config.Logging.Output == "file" || config.Logging.Output == "both") {
+		config.Logging.FilePath = "logs/speech.log" // 默认相对路径
 	}
 }
 

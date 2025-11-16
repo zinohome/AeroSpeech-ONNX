@@ -49,7 +49,7 @@
     "level": "info",
     "format": "text",
     "output": "both",
-    "file_path": "/app/logs/speech.log",
+    "file_path": "logs/speech.log",
     "max_size": 100,
     "max_backups": 5,
     "max_age": 30,
