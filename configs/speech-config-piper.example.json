@@ -2,7 +2,7 @@
   "mode": "unified",
   "server": {
     "host": "0.0.0.0",
-    "port": 8080,
+    "port": 8780,
     "read_timeout": 20
   },
   "stt": {
@@ -17,10 +17,10 @@
     "debug": false
   },
   "tts": {
-    "model_path": "models/tts/kokoro-multi-lang-v1_1/model.onnx",
-    "voices_path": "models/tts/kokoro-multi-lang-v1_1/voices.bin",
-    "tokens_path": "models/tts/kokoro-multi-lang-v1_1/tokens.txt",
-    "data_dir": "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data",
+    "model_path": "models/tts/vits-piper-zh_CN-huayan-medium/zh_CN-huayan-medium.onnx",
+    "model_config": "models/tts/vits-piper-zh_CN-huayan-medium/zh_CN-huayan-medium.onnx.json",
+    "tokens_path": "models/tts/vits-piper-zh_CN-huayan-medium/tokens.txt",
+    "data_dir": "models/tts/vits-piper-zh_CN-huayan-medium/espeak-ng-data",
     "provider": {
       "provider": "cpu",
       "device_id": 0,
@@ -29,7 +29,7 @@
     "debug": false
   },
   "audio": {
-    "sample_rate": 16000,
+    "sample_rate": 22050,
     "feature_dim": 80,
     "chunk_size": 4096,
     "normalize_factor": 32768.0
@@ -45,23 +45,11 @@
     "send_queue_size": 500,
     "max_send_errors": 10
   },
-  "rate_limit": {
-    "enabled": false,
-    "requests_per_second": 1000,
-    "burst_size": 2000,
-    "max_connections": 2000
-  },
-  "vad": {
-    "enabled": false,
-    "provider": "silero",
-    "pool_size": 200,
-    "threshold": 0.5
-  },
   "logging": {
     "level": "info",
     "format": "text",
     "output": "both",
-    "file_path": "logs/speech.log",
+    "file_path": "logs/speech-piper.log",
     "max_size": 100,
     "max_backups": 5,
     "max_age": 30,

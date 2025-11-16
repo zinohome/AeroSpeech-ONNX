@@ -3,15 +3,14 @@
   "server": {
     "host": "0.0.0.0",
     "port": 8080,
-    "read_timeout": 20
+    "read_timeout": 15
   },
   "stt": {
-    "model_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx",
-    "tokens_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
+    "model_path": "models/asr/sherpa-onnx-paraformer-zh-small-2024-03-09/model.int8.onnx",
+    "tokens_path": "models/asr/sherpa-onnx-paraformer-zh-small-2024-03-09/tokens.txt",
     "language": "zh",
     "provider": {
       "provider": "cpu",
-      "device_id": 0,
       "num_threads": 4
     },
     "debug": false
@@ -23,7 +22,6 @@
     "data_dir": "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data",
     "provider": {
       "provider": "cpu",
-      "device_id": 0,
       "num_threads": 4
     },
     "debug": false
@@ -31,40 +29,40 @@
   "audio": {
     "sample_rate": 16000,
     "feature_dim": 80,
-    "chunk_size": 4096,
+    "chunk_size": 1024,
     "normalize_factor": 32768.0
   },
   "websocket": {
-    "read_timeout": 20,
-    "max_message_size": 2097152,
+    "read_timeout": 15,
+    "max_message_size": 1048576,
     "read_buffer_size": 1024,
     "write_buffer_size": 1024,
     "enable_compression": false
   },
   "session": {
-    "send_queue_size": 500,
+    "send_queue_size": 300,
     "max_send_errors": 10
   },
   "rate_limit": {
-    "enabled": false,
-    "requests_per_second": 1000,
-    "burst_size": 2000,
-    "max_connections": 2000
+    "enabled": true,
+    "requests_per_second": 500,
+    "burst_size": 1000,
+    "max_connections": 1000
   },
   "vad": {
-    "enabled": false,
+    "enabled": true,
     "provider": "silero",
-    "pool_size": 200,
-    "threshold": 0.5
+    "pool_size": 100,
+    "threshold": 0.6
   },
   "logging": {
-    "level": "info",
+    "level": "warn",
     "format": "text",
-    "output": "both",
+    "output": "file",
     "file_path": "logs/speech.log",
-    "max_size": 100,
+    "max_size": 50,
     "max_backups": 5,
-    "max_age": 30,
+    "max_age": 7,
     "compress": false
   }
 }

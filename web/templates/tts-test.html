@@ -4,6 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TTS 测试界面</title>
+    <script>
+        // 在页面加载前就设置错误处理，忽略浏览器扩展注入的脚本错误
+        (function() {
+            const originalError = window.onerror;
+            window.onerror = function(message, source, lineno, colno, error) {
+                // 忽略contentScript.js相关的错误
+                if (message && (
+                    typeof message === 'string' && (
+                        message.includes('Automatic publicPath') ||
+                        message.includes('contentScript.js')
+                    )
+                ) || (source && typeof source === 'string' && source.includes('contentScript.js'))) {
+                    // 静默忽略，不输出任何信息
+                    return true; // 阻止默认错误处理
+                }
+                // 其他错误正常处理
+                if (originalError) {
+                    return originalError.apply(this, arguments);
+                }
+                return false;
+            };
+            
+            // 捕获未处理的Promise错误
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && (
+                    (e.reason.message && typeof e.reason.message === 'string' && (
+                        e.reason.message.includes('Automatic publicPath') ||
+                        e.reason.message.includes('contentScript.js')
+                    )) || (typeof e.reason === 'string' && e.reason.includes('Automatic publicPath'))
+                )) {
+                    e.preventDefault();
+                    // 静默忽略
+                }
+            }, true);
+        })();
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -85,8 +121,8 @@
         <div id="status" class="status disconnected">未连接</div>
         
         <div>
-            <button id="connectBtn" onclick="connect()">连接</button>
-            <button id="disconnectBtn" onclick="disconnect()" disabled>断开</button>
+            <button id="connectBtn">连接</button>
+            <button id="disconnectBtn" disabled>断开</button>
         </div>
         
         <div class="controls">
@@ -98,16 +134,27 @@
             <div class="control-group">
                 <label>说话人：</label>
                 <select id="speakerSelect">
-                    <option value="0">默认</option>
-                    <option value="45">小贝</option>
-                    <option value="46">小妮</option>
-                    <option value="47">小小</option>
-                    <option value="48">小艺</option>
-                    <option value="49">云健</option>
-                    <option value="50">云溪</option>
-                    <option value="51">云霞</option>
-                    <option value="52">云阳</option>
+                    <optgroup label="美式英语女声">
+                        <option value="0">0 - af_maple (默认)</option>
+                        <option value="1">1 - af_sol</option>
+                    </optgroup>
+                    <optgroup label="英式英语女声">
+                        <option value="2">2 - bf_vale</option>
+                    </optgroup>
+                    <optgroup label="中文女声 (55个)">
+                        <option value="3">3 - zf_001</option>
+                        <option value="4">4 - zf_002</option>
+                        <option value="5">5 - zf_003</option>
+                        <!-- 更多说话人会通过刷新列表动态加载 -->
+                    </optgroup>
+                    <optgroup label="中文男声 (45个)">
+                        <option value="58">58 - zm_009</option>
+                        <option value="59">59 - zm_010</option>
+                        <!-- 更多说话人会通过刷新列表动态加载 -->
+                    </optgroup>
                 </select>
+                <button id="refreshSpeakersBtn" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">刷新列表 (103个说话人)</button>
+                <span id="speakerInfo" style="margin-left: 10px; font-size: 12px; color: #666;"></span>
             </div>
             
             <div class="control-group">
@@ -117,8 +164,9 @@
             </div>
             
             <div class="control-group">
-                <button id="synthesizeBtn" onclick="synthesize()" disabled>合成</button>
-                <button id="synthesizeAPIBtn" onclick="synthesizeAPI()">API合成</button>
+                <button id="synthesizeBtn" disabled>合成</button>
+                <button id="synthesizeAPIBtn">API合成</button>
+                <button id="testBtn">测试连接</button>
             </div>
         </div>
         
@@ -126,40 +174,50 @@
     </div>
 
     <script>
+        // 忽略浏览器扩展注入的脚本错误
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('Automatic publicPath')) {
+                e.preventDefault();
+                console.warn('Ignored browser extension error:', e.message);
+                return false;
+            }
+        }, true);
+
         let ws = null;
         let audioContext = null;
-        let audioBuffer = null;
+        let audioChunks = []; // 累积音频数据块
+        let isReceivingAudio = false; // 是否正在接收音频
 
-        function connect() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function() {
+        function setupWebSocketHandlers(websocket) {
+            websocket.onopen = function() {
                 updateStatus('已连接', true);
                 document.getElementById('connectBtn').disabled = true;
                 document.getElementById('disconnectBtn').disabled = false;
                 document.getElementById('synthesizeBtn').disabled = false;
             };
             
-            ws.onmessage = function(event) {
+            websocket.onmessage = function(event) {
                 if (event.data instanceof ArrayBuffer) {
-                    // 音频数据
-                    handleAudioData(event.data);
+                    // 音频数据块，累积起来
+                    isReceivingAudio = true;
+                    audioChunks.push(event.data);
                 } else {
                     // 文本消息
-                    const message = JSON.parse(event.data);
-                    handleMessage(message);
+                    try {
+                        const message = JSON.parse(event.data);
+                        handleMessage(message);
+                    } catch (e) {
+                        console.error('Failed to parse message:', e);
+                    }
                 }
             };
             
-            ws.onerror = function(error) {
+            websocket.onerror = function(error) {
                 console.error('WebSocket error:', error);
                 updateStatus('连接错误', false);
             };
             
-            ws.onclose = function() {
+            websocket.onclose = function() {
                 updateStatus('已断开', false);
                 document.getElementById('connectBtn').disabled = false;
                 document.getElementById('disconnectBtn').disabled = true;
@@ -167,11 +225,23 @@
             };
         }
 
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // 统一服务模式下使用 /ws/tts，兼容模式使用 /ws?type=tts
+            const wsUrl = `${protocol}//${window.location.host}/ws/tts`;
+            
+            ws = new WebSocket(wsUrl);
+            setupWebSocketHandlers(ws);
+        }
+
         function disconnect() {
             if (ws) {
                 ws.close();
                 ws = null;
             }
+            // 清除累积的音频数据
+            audioChunks = [];
+            isReceivingAudio = false;
         }
 
         function updateStatus(text, connected) {
@@ -184,43 +254,110 @@
             if (message.type === 'connection') {
                 console.log('Connected:', message.data);
             } else if (message.type === 'complete') {
-                console.log('Synthesis complete');
+                console.log('Synthesis complete, audio chunks:', audioChunks.length);
+                // 收到完成消息，播放累积的音频数据
+                if (isReceivingAudio && audioChunks.length > 0) {
+                    playAccumulatedAudio().then(() => {
+                        console.log('Audio playback completed');
+                    }).catch(err => {
+                        console.error('Audio playback error:', err);
+                    });
+                    audioChunks = [];
+                    isReceivingAudio = false;
+                } else {
+                    console.warn('Complete message received but no audio chunks');
+                }
             } else if (message.type === 'error') {
                 alert('错误: ' + message.error);
+                // 清除累积的音频数据
+                audioChunks = [];
+                isReceivingAudio = false;
             }
         }
 
-        function handleAudioData(data) {
-            if (!audioContext) {
-                audioContext = new AudioContext({ sampleRate: 24000 });
-            }
+        async function playAccumulatedAudio() {
+            try {
+                // 确保AudioContext已创建且处于运行状态
+                if (!audioContext) {
+                    audioContext = new AudioContext({ sampleRate: 24000 });
+                }
+                
+                // 如果AudioContext被暂停，恢复它（需要用户交互）
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
 
-            // 转换ArrayBuffer为Int16Array
-            const int16Data = new Int16Array(data);
-            const float32Data = new Float32Array(int16Data.length);
-            for (let i = 0; i < int16Data.length; i++) {
-                float32Data[i] = int16Data[i] / 32768.0;
-            }
+                // 检查是否有音频数据
+                if (audioChunks.length === 0) {
+                    console.warn('No audio chunks to play');
+                    return;
+                }
 
-            // 创建AudioBuffer并播放
-            const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
-            buffer.copyToChannel(float32Data, 0);
-            
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioContext.destination);
-            source.start();
+                // 合并所有音频块
+                const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+                if (totalLength === 0) {
+                    console.warn('Total audio length is 0');
+                    return;
+                }
+
+                const mergedBuffer = new ArrayBuffer(totalLength);
+                const mergedView = new Uint8Array(mergedBuffer);
+                
+                let offset = 0;
+                for (const chunk of audioChunks) {
+                    if (chunk && chunk.byteLength > 0) {
+                        mergedView.set(new Uint8Array(chunk), offset);
+                        offset += chunk.byteLength;
+                    }
+                }
+
+                // 检查数据长度是否有效（至少需要2字节，因为Int16是2字节）
+                if (mergedBuffer.byteLength < 2) {
+                    console.warn('Audio data too short:', mergedBuffer.byteLength);
+                    return;
+                }
+
+                // 转换ArrayBuffer为Int16Array，然后转为Float32Array
+                const int16Data = new Int16Array(mergedBuffer);
+                const float32Data = new Float32Array(int16Data.length);
+                for (let i = 0; i < int16Data.length; i++) {
+                    float32Data[i] = Math.max(-1, Math.min(1, int16Data[i] / 32768.0));
+                }
+
+                // 创建AudioBuffer并播放
+                const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+                buffer.copyToChannel(float32Data, 0);
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start();
+                
+                console.log('Audio played successfully, length:', float32Data.length, 'samples');
+            } catch (e) {
+                console.error('Failed to play audio:', e);
+                alert('播放音频失败: ' + e.message);
+            }
         }
 
         function synthesize() {
+            console.log('synthesize() called');
+            
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 alert('请先连接WebSocket');
                 return;
             }
 
             const text = document.getElementById('textInput').value;
+            if (!text || text.trim() === '') {
+                alert('请输入要合成的文本');
+                return;
+            }
+
             const speakerID = parseInt(document.getElementById('speakerSelect').value);
             const speed = parseFloat(document.getElementById('speedSlider').value);
+
+            console.log('Sending synthesize request:', { text, speakerID, speed });
 
             const message = {
                 type: 'synthesize',
@@ -231,34 +368,97 @@
                 }
             };
 
-            ws.send(JSON.stringify(message));
+            try {
+                ws.send(JSON.stringify(message));
+                console.log('Synthesize message sent');
+            } catch (e) {
+                console.error('Failed to send message:', e);
+                alert('发送合成请求失败: ' + e.message);
+            }
         }
 
         async function synthesizeAPI() {
             const text = document.getElementById('textInput').value;
+            if (!text || text.trim() === '') {
+                alert('请输入要合成的文本');
+                return;
+            }
+
             const speakerID = parseInt(document.getElementById('speakerSelect').value);
             const speed = parseFloat(document.getElementById('speedSlider').value);
 
-            const response = await fetch('/api/v1/tts/synthesize', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text: text,
-                    speaker_id: speakerID,
-                    speed: speed
-                })
-            });
+            try {
+                console.log('API synthesis request:', { text, speakerID, speed });
+                
+                const response = await fetch('/api/v1/tts/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        speaker_id: speakerID,
+                        speed: speed
+                    })
+                });
 
-            if (response.ok) {
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audio = new Audio(audioUrl);
-                audio.play();
-            } else {
-                const error = await response.json();
-                alert('合成失败: ' + error.message);
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    
+                    // 检查blob类型
+                    if (audioBlob.size === 0) {
+                        alert('合成失败: 返回的音频数据为空');
+                        return;
+                    }
+                    
+                    console.log('Audio blob received, size:', audioBlob.size, 'bytes');
+                    
+                    // 使用AudioContext播放，而不是HTML Audio元素
+                    if (!audioContext) {
+                        audioContext = new AudioContext({ sampleRate: 24000 });
+                    }
+                    
+                    // 如果AudioContext被暂停，恢复它（需要用户交互）
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                    }
+                    
+                    // 将blob转换为ArrayBuffer
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    
+                    if (arrayBuffer.byteLength < 2) {
+                        alert('合成失败: 音频数据太短');
+                        return;
+                    }
+                    
+                    const int16Data = new Int16Array(arrayBuffer);
+                    const float32Data = new Float32Array(int16Data.length);
+                    for (let i = 0; i < int16Data.length; i++) {
+                        float32Data[i] = Math.max(-1, Math.min(1, int16Data[i] / 32768.0));
+                    }
+                    
+                    const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+                    buffer.copyToChannel(float32Data, 0);
+                    
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioContext.destination);
+                    source.start();
+                    
+                    console.log('API audio played successfully, length:', float32Data.length, 'samples');
+                } else {
+                    const errorText = await response.text();
+                    let error;
+                    try {
+                        error = JSON.parse(errorText);
+                    } catch (e) {
+                        error = { message: errorText || '未知错误' };
+                    }
+                    alert('合成失败: ' + (error.message || error.error || '未知错误'));
+                }
+            } catch (e) {
+                console.error('API synthesis error:', e);
+                alert('合成失败: ' + e.message);
             }
         }
 
@@ -266,6 +466,166 @@
         document.getElementById('speedSlider').addEventListener('input', function(e) {
             document.getElementById('speedValue').textContent = e.target.value;
         });
+
+        // 刷新说话人列表
+        async function refreshSpeakers() {
+            try {
+                const response = await fetch('/api/v1/tts/speakers');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.code === 200 && data.data && data.data.speakers) {
+                        const select = document.getElementById('speakerSelect');
+                        const currentValue = select.value;
+                        
+                        // 清空现有选项
+                        select.innerHTML = '';
+                        
+                        // 根据category分组
+                        const groups = {
+                            'American Female': [],
+                            'British Female': [],
+                            'Chinese Female': [],
+                            'Chinese Male': []
+                        };
+                        
+                        data.data.speakers.forEach(speaker => {
+                            const category = speaker.category || 'Other';
+                            const name = speaker.name || `speaker_${speaker.id}`;
+                            
+                            if (!groups[category]) {
+                                groups[category] = [];
+                            }
+                            
+                            groups[category].push({
+                                id: speaker.id,
+                                name: name,
+                                display: `${speaker.id} - ${name}${speaker.id === 0 ? ' (默认)' : ''}`
+                            });
+                        });
+                        
+                        // 定义分组顺序和中文标签
+                        const groupOrder = [
+                            { key: 'American Female', label: '美式英语女声' },
+                            { key: 'British Female', label: '英式英语女声' },
+                            { key: 'Chinese Female', label: '中文女声' },
+                            { key: 'Chinese Male', label: '中文男声' }
+                        ];
+                        
+                        // 创建分组选项
+                        groupOrder.forEach(({ key, label }) => {
+                            if (groups[key] && groups[key].length > 0) {
+                                const optgroup = document.createElement('optgroup');
+                                optgroup.label = `${label} (${groups[key].length}个)`;
+                                
+                                groups[key].forEach(speaker => {
+                                    const option = document.createElement('option');
+                                    option.value = speaker.id;
+                                    option.textContent = speaker.display;
+                                    optgroup.appendChild(option);
+                                });
+                                
+                                select.appendChild(optgroup);
+                            }
+                        });
+                        
+                        // 恢复之前的选择
+                        if (currentValue) {
+                            select.value = currentValue;
+                        }
+                        
+                        // 更新信息显示
+                        const total = data.data.total || data.data.speakers.length;
+                        const infoSpan = document.getElementById('speakerInfo');
+                        if (infoSpan) {
+                            infoSpan.textContent = `已加载 ${total} 个说话人`;
+                        }
+                        
+                        console.log('Speaker list refreshed:', total, 'speakers loaded');
+                        
+                        // 显示模型信息
+                        if (data.data.info) {
+                            console.log('Model info:', data.data.info);
+                        }
+                    } else {
+                        console.warn('Failed to get speakers:', data);
+                    }
+                } else {
+                    console.error('Failed to fetch speakers:', response.status);
+                }
+            } catch (e) {
+                console.error('Error refreshing speakers:', e);
+                alert('刷新说话人列表失败: ' + e.message);
+            }
+        }
+
+        // 测试连接函数
+        function testConnection() {
+            console.log('testConnection() called');
+            console.log('WebSocket state:', ws ? ws.readyState : 'null');
+            console.log('AudioContext state:', audioContext ? audioContext.state : 'null');
+            
+            if (ws) {
+                console.log('WebSocket URL:', ws.url);
+                console.log('WebSocket readyState:', ws.readyState, {
+                    0: 'CONNECTING',
+                    1: 'OPEN',
+                    2: 'CLOSING',
+                    3: 'CLOSED'
+                }[ws.readyState]);
+            }
+            
+            alert('连接状态: ' + (ws && ws.readyState === WebSocket.OPEN ? '已连接' : '未连接'));
+        }
+
+        // 使用addEventListener绑定事件，更可靠
+        document.addEventListener('DOMContentLoaded', function() {
+            // 连接按钮
+            document.getElementById('connectBtn').addEventListener('click', function() {
+                console.log('Connect button clicked');
+                connect();
+            });
+            
+            // 断开按钮
+            document.getElementById('disconnectBtn').addEventListener('click', function() {
+                console.log('Disconnect button clicked');
+                disconnect();
+            });
+            
+            // 合成按钮
+            document.getElementById('synthesizeBtn').addEventListener('click', function() {
+                console.log('Synthesize button clicked');
+                synthesize();
+            });
+            
+            // API合成按钮
+            document.getElementById('synthesizeAPIBtn').addEventListener('click', function() {
+                console.log('API Synthesize button clicked');
+                synthesizeAPI();
+            });
+            
+            // 测试连接按钮
+            document.getElementById('testBtn').addEventListener('click', function() {
+                console.log('Test connection button clicked');
+                testConnection();
+            });
+            
+            // 刷新说话人列表按钮
+            document.getElementById('refreshSpeakersBtn').addEventListener('click', function() {
+                console.log('Refresh speakers button clicked');
+                refreshSpeakers();
+            });
+            
+            // 页面加载时自动刷新说话人列表
+            refreshSpeakers();
+        });
+
+        // 确保函数在全局作用域（兼容onclick方式）
+        window.synthesize = synthesize;
+        window.synthesizeAPI = synthesizeAPI;
+        window.connect = connect;
+        window.disconnect = disconnect;
+        window.testConnection = testConnection;
+        window.refreshSpeakers = refreshSpeakers;
     </script>
 </body>
 </html>

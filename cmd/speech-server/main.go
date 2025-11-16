@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zhangjun/AeroSpeech-ONNX/internal/asr"
+	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/bootstrap"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/config"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/handlers"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/logger"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/router"
-	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/session"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/ws"
-	"github.com/zhangjun/AeroSpeech-ONNX/internal/tts"
 )
 
 func main() {
@@ -50,41 +48,35 @@ func main() {
 
 	logger.Infof("Starting speech server in %s mode...", cfg.Mode)
 
-	// 创建管理器
-	var asrManager *asr.Manager
-	var ttsManager *tts.Manager
-
-	// 初始化STT管理器
-	if cfg.STT != nil {
-		poolSize := 4 // 默认池大小
-		asrManager, err = asr.NewManager(cfg.STT, poolSize)
-		if err != nil {
-			logger.Errorf("Failed to create ASR manager: %v", err)
-			os.Exit(1)
-		}
-		defer asrManager.Close()
-		logger.Info("ASR manager initialized")
+	// 使用bootstrap初始化所有组件
+	deps, err := bootstrap.InitApp(cfg)
+	if err != nil {
+		logger.Errorf("Failed to initialize app: %v", err)
+		os.Exit(1)
 	}
+	defer deps.Close()
 
-	// 初始化TTS管理器
-	if cfg.TTS != nil {
-		poolSize := 5 // TTS默认池大小较小
-		ttsManager, err = tts.NewManager(cfg.TTS, poolSize)
-		if err != nil {
-			logger.Errorf("Failed to create TTS manager: %v", err)
-			os.Exit(1)
-		}
-		defer ttsManager.Close()
-		logger.Info("TTS manager initialized")
+	// 从依赖注入获取组件
+	asrManager := deps.ASRManager
+	ttsManager := deps.TTSManager
+	sessionManager := deps.SessionManager
+
+	// 创建路由（带限流器）
+	var r *router.Router
+	if deps.RateLimiter != nil && cfg.RateLimit.Enabled {
+		r = router.NewRouterWithRateLimit(deps.RateLimiter)
+	} else {
+		r = router.NewRouter()
 	}
-
-	// 创建会话管理器
-	sessionManager := session.NewManager(1000, 30*time.Minute)
-
-	// 创建路由
-	r := router.NewRouter()
 	r.SetupMiddleware()
 	r.SetupStaticFiles("web/static", "web/templates")
+
+	// 启动配置热重载
+	if deps.HotReloadMgr != nil {
+		if err := deps.HotReloadMgr.StartWatching(configPath); err != nil {
+			logger.Warnf("Failed to start config hot reload: %v", err)
+		}
+	}
 
 	// 创建处理器
 	var sttHandler *handlers.STTHandler
@@ -200,9 +192,21 @@ func main() {
 				}
 			}
 
-			// 统计信息
+			// 统计信息（包含限流器统计）
 			api.GET("/stats", handlers.StatsHandler(nil))
 			api.GET("/monitor", handlers.MonitorHandler(nil))
+
+			// 限流器统计
+			if deps.RateLimiter != nil {
+				api.GET("/rate-limit/stats", func(c *gin.Context) {
+					stats := deps.RateLimiter.GetStats()
+					c.JSON(http.StatusOK, gin.H{
+						"code":    200,
+						"message": "success",
+						"data":    stats,
+					})
+				})
+			}
 		}
 
 		// WebSocket路由

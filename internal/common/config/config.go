@@ -79,6 +79,22 @@ type LoggingConfig struct {
 	Compress   bool   `mapstructure:"compress" json:"compress"`
 }
 
+// RateLimitConfig 限流配置
+type RateLimitConfig struct {
+	Enabled           bool `mapstructure:"enabled" json:"enabled"`
+	RequestsPerSecond int  `mapstructure:"requests_per_second" json:"requests_per_second"`
+	BurstSize         int  `mapstructure:"burst_size" json:"burst_size"`
+	MaxConnections    int  `mapstructure:"max_connections" json:"max_connections"`
+}
+
+// VADConfig VAD配置
+type VADConfig struct {
+	Enabled   bool    `mapstructure:"enabled" json:"enabled"`
+	Provider  string  `mapstructure:"provider" json:"provider"` // "silero", "ten", etc.
+	PoolSize  int     `mapstructure:"pool_size" json:"pool_size"`
+	Threshold float32 `mapstructure:"threshold" json:"threshold"`
+}
+
 // STTConfig STT服务配置
 type STTConfig struct {
 	Server    ServerConfig    `mapstructure:"server" json:"server"`
@@ -86,6 +102,8 @@ type STTConfig struct {
 	Audio     AudioConfig     `mapstructure:"audio" json:"audio"`
 	WebSocket WebSocketConfig `mapstructure:"websocket" json:"websocket"`
 	Session   SessionConfig   `mapstructure:"session" json:"session"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit" json:"rate_limit"`
+	VAD       VADConfig       `mapstructure:"vad" json:"vad"`
 	Logging   LoggingConfig   `mapstructure:"logging" json:"logging"`
 }
 
@@ -96,6 +114,7 @@ type TTSConfig struct {
 	Audio     AudioConfig     `mapstructure:"audio" json:"audio"`
 	WebSocket WebSocketConfig `mapstructure:"websocket" json:"websocket"`
 	Session   SessionConfig   `mapstructure:"session" json:"session"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit" json:"rate_limit"`
 	Logging   LoggingConfig   `mapstructure:"logging" json:"logging"`
 }
 
@@ -108,6 +127,8 @@ type UnifiedConfig struct {
 	Audio     AudioConfig     `mapstructure:"audio" json:"audio"`
 	WebSocket WebSocketConfig `mapstructure:"websocket" json:"websocket"`
 	Session   SessionConfig   `mapstructure:"session" json:"session"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit" json:"rate_limit"`
+	VAD       VADConfig       `mapstructure:"vad" json:"vad"`
 	Logging   LoggingConfig   `mapstructure:"logging" json:"logging"`
 }
 
@@ -537,6 +558,25 @@ func setUnifiedDefaults(config *UnifiedConfig) {
 	}
 	if config.Session.MaxSendErrors == 0 {
 		config.Session.MaxSendErrors = 10
+	}
+
+	// 限流配置默认值
+	if config.RateLimit.RequestsPerSecond == 0 {
+		config.RateLimit.RequestsPerSecond = 1000
+	}
+	if config.RateLimit.BurstSize == 0 {
+		config.RateLimit.BurstSize = 2000
+	}
+	if config.RateLimit.MaxConnections == 0 {
+		config.RateLimit.MaxConnections = 2000
+	}
+
+	// VAD配置默认值
+	if config.VAD.PoolSize == 0 {
+		config.VAD.PoolSize = 200
+	}
+	if config.VAD.Threshold == 0 {
+		config.VAD.Threshold = 0.5
 	}
 
 	// 日志配置默认值

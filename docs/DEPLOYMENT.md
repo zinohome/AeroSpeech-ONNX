@@ -26,11 +26,41 @@ go mod download
 复制配置文件模板：
 
 ```bash
+cp configs/speech-config.example.json configs/speech-config.json
+# 或者独立服务模式
 cp configs/stt-config.example.json configs/stt-config.json
 cp configs/tts-config.example.json configs/tts-config.json
 ```
 
 编辑配置文件，设置模型路径和Provider。
+
+#### 新增配置项（v2.0）⭐
+
+**限流配置**（生产环境建议启用）：
+```json
+{
+  "rate_limit": {
+    "enabled": true,
+    "requests_per_second": 1000,
+    "burst_size": 2000,
+    "max_connections": 2000
+  }
+}
+```
+
+**VAD配置**（可选）：
+```json
+{
+  "vad": {
+    "enabled": false,
+    "provider": "silero",
+    "pool_size": 200,
+    "threshold": 0.5
+  }
+}
+```
+
+配置文件支持热重载，修改后2秒自动生效，无需重启服务。
 
 ### 2.3 运行服务
 

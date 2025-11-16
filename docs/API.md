@@ -84,15 +84,81 @@
 
 ## 3. 监控API
 
-### 3.1 实时监控数据
+### 3.1 综合统计信息
+
+**GET** `/api/v1/stats`
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "timestamp": "2025-11-16T10:00:00Z",
+    "asr": {
+      "total_requests": 1000,
+      "successful_requests": 980,
+      "failed_requests": 20,
+      "avg_latency_ms": 150.5,
+      "p95_latency_ms": 300,
+      "p99_latency_ms": 500,
+      "requests_per_second": 10.5
+    },
+    "tts": {
+      "total_requests": 800,
+      "successful_requests": 790,
+      "failed_requests": 10,
+      "avg_latency_ms": 200.3,
+      "p95_latency_ms": 400,
+      "p99_latency_ms": 600,
+      "requests_per_second": 8.2
+    },
+    "sessions": {
+      "active": 42,
+      "total": 150,
+      "total_sessions": 5000,
+      "active_sessions": 42,
+      "total_messages": 150000
+    },
+    "resources": {
+      "cpu_usage_percent": 45.2,
+      "memory_usage_mb": 1024,
+      "goroutine_count": 150,
+      "pool_usage_percent": 65.5
+    }
+  }
+}
+```
+
+### 3.2 限流器统计信息 ⭐ 新增
+
+**GET** `/api/v1/rate-limit/stats`
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "enabled": true,
+    "active_limiters": 15,
+    "current_connections": 42,
+    "max_connections": 2000,
+    "requests_per_second": 1000,
+    "burst_size": 2000
+  }
+}
+```
+
+### 3.3 实时监控数据
 
 **GET** `/api/v1/monitor`
 
-### 3.2 会话列表
+### 3.4 会话列表
 
 **GET** `/api/v1/sessions`
 
-### 3.3 会话详情
+### 3.5 会话详情
 
 **GET** `/api/v1/sessions/{session_id}`
 

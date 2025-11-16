@@ -50,34 +50,52 @@ func NewPool(cfg *config.ASRConfig, size int) (*Pool, error) {
 		cancel: cancel,
 	}
 
-	// 预创建Provider
+	// 并行初始化Provider
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	successCount := 0
+
 	for i := 0; i < size; i++ {
-		provider, err := NewASRProvider(cfg)
-		if err != nil {
-			logger.Warnf("Failed to create ASR provider %d: %v", i, err)
-			continue
-		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
 
-		// 预热Provider
-		if err := provider.Warmup(); err != nil {
-			logger.Warnf("Failed to warmup ASR provider %d: %v", i, err)
-			provider.Release()
-			continue
-		}
+			provider, err := NewASRProvider(cfg)
+			if err != nil {
+				logger.Warnf("Failed to create ASR provider %d: %v", index, err)
+				return
+			}
 
-		pool.providers <- provider
-		pool.stats.mu.Lock()
-		pool.stats.TotalCreated++
-		pool.stats.CurrentActive++
-		pool.stats.mu.Unlock()
+			// 预热Provider
+			if err := provider.Warmup(); err != nil {
+				logger.Warnf("Failed to warmup ASR provider %d: %v", index, err)
+				provider.Release()
+				return
+			}
+
+			// 成功创建，放入池中
+			pool.providers <- provider
+			pool.stats.mu.Lock()
+			pool.stats.TotalCreated++
+			pool.stats.CurrentActive++
+			pool.stats.mu.Unlock()
+
+			mu.Lock()
+			successCount++
+			mu.Unlock()
+
+			logger.Infof("ASR provider %d initialized successfully", index)
+		}(i)
 	}
 
-	if len(pool.providers) == 0 {
+	wg.Wait()
+
+	if successCount == 0 {
 		cancel()
 		return nil, fmt.Errorf("failed to create any ASR provider")
 	}
 
-	logger.Infof("ASR pool initialized with %d providers", len(pool.providers))
+	logger.Infof("ASR pool initialized with %d/%d providers", successCount, size)
 
 	return pool, nil
 }
@@ -98,12 +116,42 @@ func (p *Pool) Get(ctx context.Context) (Provider, error) {
 		p.stats.mu.Unlock()
 		return provider, nil
 
+	case <-time.After(100 * time.Millisecond):
+		// 超时，尝试创建临时Provider
+		logger.Warn("Pool timeout, creating temporary provider")
+		provider, err := p.createTemporaryProvider()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temporary provider: %w", err)
+		}
+		return provider, nil
+
 	case <-ctx.Done():
 		return nil, ctx.Err()
 
 	case <-p.ctx.Done():
 		return nil, fmt.Errorf("pool is closed")
 	}
+}
+
+// createTemporaryProvider 创建临时Provider
+func (p *Pool) createTemporaryProvider() (Provider, error) {
+	provider, err := NewASRProvider(p.config)
+	if err != nil {
+		return nil, err
+	}
+
+	// 预热Provider
+	if err := provider.Warmup(); err != nil {
+		provider.Release()
+		return nil, err
+	}
+
+	p.stats.mu.Lock()
+	p.stats.TotalCreated++
+	p.stats.mu.Unlock()
+
+	logger.Info("Created temporary ASR provider")
+	return provider, nil
 }
 
 // Put 归还Provider到资源池

@@ -57,10 +57,10 @@
 ```json
 {
   "tts": {
-    "model_path": "models/tts/kokoro-multi-lang-v1_0/model.onnx",
-    "voices_path": "models/tts/kokoro-multi-lang-v1_0/voices.bin",
-    "tokens_path": "models/tts/kokoro-multi-lang-v1_0/tokens.txt",
-    "data_dir": "models/tts/kokoro-multi-lang-v1_0/espeak-ng-data",
+    "model_path": "models/tts/kokoro-multi-lang-v1_1/model.onnx",
+    "voices_path": "models/tts/kokoro-multi-lang-v1_1/voices.bin",
+    "tokens_path": "models/tts/kokoro-multi-lang-v1_1/tokens.txt",
+    "data_dir": "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data",
     "num_threads": 4,
     "provider": "cpu",
     "debug": false
@@ -73,10 +73,10 @@
 ```json
 {
   "tts": {
-    "model_path": "models/tts/kokoro-multi-lang-v1_0/model.onnx",
-    "voices_path": "models/tts/kokoro-multi-lang-v1_0/voices.bin",
-    "tokens_path": "models/tts/kokoro-multi-lang-v1_0/tokens.txt",
-    "data_dir": "models/tts/kokoro-multi-lang-v1_0/espeak-ng-data",
+    "model_path": "models/tts/kokoro-multi-lang-v1_1/model.onnx",
+    "voices_path": "models/tts/kokoro-multi-lang-v1_1/voices.bin",
+    "tokens_path": "models/tts/kokoro-multi-lang-v1_1/tokens.txt",
+    "data_dir": "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data",
     "num_threads": 1,
     "provider": "cuda",
     "device_id": 0,

@@ -3,16 +3,18 @@
   "server": {
     "host": "0.0.0.0",
     "port": 8080,
-    "read_timeout": 20
+    "read_timeout": 20,
+    "max_connections": 500
   },
   "stt": {
     "model_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx",
     "tokens_path": "models/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
     "language": "zh",
     "provider": {
-      "provider": "cpu",
+      "provider": "auto",
       "device_id": 0,
-      "num_threads": 4
+      "num_threads": 4,
+      "pool_size": 5
     },
     "debug": false
   },
@@ -21,10 +23,13 @@
     "voices_path": "models/tts/kokoro-multi-lang-v1_1/voices.bin",
     "tokens_path": "models/tts/kokoro-multi-lang-v1_1/tokens.txt",
     "data_dir": "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data",
+    "lexicon_en": "models/tts/kokoro-multi-lang-v1_1/lexicon-us-en.txt",
+    "lexicon_zh": "models/tts/kokoro-multi-lang-v1_1/lexicon-zh.txt",
     "provider": {
-      "provider": "cpu",
+      "provider": "auto",
       "device_id": 0,
-      "num_threads": 4
+      "num_threads": 4,
+      "pool_size": 4
     },
     "debug": false
   },
@@ -36,20 +41,25 @@
   },
   "websocket": {
     "read_timeout": 20,
+    "write_timeout": 20,
+    "ping_interval": 54,
+    "ping_timeout": 60,
     "max_message_size": 2097152,
-    "read_buffer_size": 1024,
-    "write_buffer_size": 1024,
+    "read_buffer_size": 4096,
+    "write_buffer_size": 4096,
     "enable_compression": false
   },
   "session": {
+    "max_sessions": 500,
+    "session_timeout": 300,
     "send_queue_size": 500,
     "max_send_errors": 10
   },
   "rate_limit": {
-    "enabled": false,
-    "requests_per_second": 1000,
-    "burst_size": 2000,
-    "max_connections": 2000
+    "enabled": true,
+    "requests_per_second": 200,
+    "burst_size": 400,
+    "max_connections": 500
   },
   "vad": {
     "enabled": false,
@@ -59,13 +69,13 @@
   },
   "logging": {
     "level": "info",
-    "format": "text",
+    "format": "json",
     "output": "both",
     "file_path": "logs/speech.log",
     "max_size": 100,
     "max_backups": 5,
     "max_age": 30,
-    "compress": false
+    "compress": true
   }
 }
 

@@ -4,6 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STT 测试界面</title>
+    <script>
+        // 在页面加载前就设置错误处理，忽略浏览器扩展注入的脚本错误
+        (function() {
+            const originalError = window.onerror;
+            window.onerror = function(message, source, lineno, colno, error) {
+                // 忽略contentScript.js相关的错误
+                if (message && (
+                    typeof message === 'string' && (
+                        message.includes('Automatic publicPath') ||
+                        message.includes('contentScript.js')
+                    )
+                ) || (source && typeof source === 'string' && source.includes('contentScript.js'))) {
+                    // 静默忽略，不输出任何信息
+                    return true; // 阻止默认错误处理
+                }
+                // 其他错误正常处理
+                if (originalError) {
+                    return originalError.apply(this, arguments);
+                }
+                return false;
+            };
+            
+            // 捕获未处理的Promise错误
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && (
+                    (e.reason.message && typeof e.reason.message === 'string' && (
+                        e.reason.message.includes('Automatic publicPath') ||
+                        e.reason.message.includes('contentScript.js')
+                    )) || (typeof e.reason === 'string' && e.reason.includes('Automatic publicPath'))
+                )) {
+                    e.preventDefault();
+                    // 静默忽略
+                }
+            }, true);
+        })();
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,6 +125,15 @@
     </div>
 
     <script>
+        // 忽略浏览器扩展注入的脚本错误
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('Automatic publicPath')) {
+                e.preventDefault();
+                console.warn('Ignored browser extension error:', e.message);
+                return false;
+            }
+        }, true);
+
         let ws = null;
         let mediaRecorder = null;
         let audioChunks = [];
@@ -96,7 +141,8 @@
 
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            // 统一服务模式下使用 /ws/stt，兼容模式使用 /ws 或 /ws?type=stt
+            const wsUrl = `${protocol}//${window.location.host}/ws/stt`;
             
             ws = new WebSocket(wsUrl);
             

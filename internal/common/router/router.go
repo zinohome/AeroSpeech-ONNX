@@ -1,12 +1,16 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
+	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/middleware"
 )
 
 // Router 路由管理器
 type Router struct {
-	engine *gin.Engine
+	engine      *gin.Engine
+	rateLimiter *middleware.RateLimiter
 }
 
 // NewRouter 创建路由管理器
@@ -14,6 +18,15 @@ func NewRouter() *Router {
 	gin.SetMode(gin.ReleaseMode)
 	return &Router{
 		engine: gin.New(),
+	}
+}
+
+// NewRouterWithRateLimit 创建带限流的路由管理器
+func NewRouterWithRateLimit(rateLimiter *middleware.RateLimiter) *Router {
+	gin.SetMode(gin.ReleaseMode)
+	return &Router{
+		engine:      gin.New(),
+		rateLimiter: rateLimiter,
 	}
 }
 
@@ -29,6 +42,15 @@ func (r *Router) SetupMiddleware() {
 
 	// 日志中间件
 	r.engine.Use(gin.Logger())
+
+	// 限流中间件
+	if r.rateLimiter != nil {
+		r.engine.Use(func(c *gin.Context) {
+			r.rateLimiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				c.Next()
+			})).ServeHTTP(c.Writer, c.Request)
+		})
+	}
 }
 
 // SetupStaticFiles 设置静态文件服务
@@ -44,5 +66,10 @@ func (r *Router) SetupRoutes(setupFunc func(*gin.Engine)) {
 	if setupFunc != nil {
 		setupFunc(r.engine)
 	}
+}
+
+// GetRateLimiter 获取限流器
+func (r *Router) GetRateLimiter() *middleware.RateLimiter {
+	return r.rateLimiter
 }
 

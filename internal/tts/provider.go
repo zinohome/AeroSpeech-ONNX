@@ -28,6 +28,15 @@ type TTSProvider struct {
 	sampleRate int
 }
 
+// isVitsModel 检测是否为VITS/Piper模型
+func isVitsModel(modelPath string) bool {
+	// 通过文件名判断模型类型
+	modelName := strings.ToLower(filepath.Base(modelPath))
+	return strings.Contains(modelName, "vits") || 
+	       strings.Contains(modelName, "piper") ||
+	       strings.Contains(modelName, "huayan")
+}
+
 // NewTTSProvider 创建TTS Provider
 func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
 	// 检查模型文件是否存在
@@ -52,32 +61,44 @@ func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
 	}
 	
 	// 构建sherpa-onnx配置
-	sampleRate := 24000 // 默认采样率
+	sampleRate := 24000 // 默认采样率（Kokoro）
 	
-	// 构建Kokoro模型配置
-	kokoroConfig := sherpa.OfflineTtsKokoroModelConfig{
-		Model: cfg.ModelPath,
+	// 判断模型类型
+	useVits := isVitsModel(cfg.ModelPath)
+	
+	var kokoroConfig sherpa.OfflineTtsKokoroModelConfig
+	var vitsConfig sherpa.OfflineTtsVitsModelConfig
+	
+	if useVits {
+		// VITS/Piper 模型配置
+		sampleRate = 22050 // Piper 模型默认采样率
+		
+		vitsConfig = sherpa.OfflineTtsVitsModelConfig{
+			Model:   cfg.ModelPath,
+			Tokens:  cfg.TokensPath,
+			DataDir: cfg.DataDir,
+		}
+		
+		// 设置 Lexicon（可选）
+		if cfg.Lexicon != "" {
+			vitsConfig.Lexicon = cfg.Lexicon
+		}
+		
+		// 设置 DictDir（可选）
+		if cfg.DictDir != "" {
+			vitsConfig.DictDir = cfg.DictDir
+		}
+	} else {
+		// Kokoro 模型配置
+		kokoroConfig = sherpa.OfflineTtsKokoroModelConfig{
+			Model: cfg.ModelPath,
+		}
 	}
 	
-	// 设置Tokens（必需）
-	if cfg.TokensPath != "" {
-		kokoroConfig.Tokens = cfg.TokensPath
-	}
-	
-	// 设置Voices（可选，用于多说话人）
-	// 注意：只有当VoicesPath非空时才设置，否则sherpa-onnx会尝试加载空字符串导致错误
-	if cfg.VoicesPath != "" {
-		kokoroConfig.Voices = cfg.VoicesPath
-	}
-	// 如果VoicesPath为空，不设置Voices字段，让sherpa-onnx使用默认行为
-	
-	// 设置DataDir（必需，用于文本处理）
-	// 如果配置中没有指定，尝试使用默认路径
+	// 共同配置：DataDir 处理
 	dataDir := cfg.DataDir
 	if dataDir == "" && cfg.ModelPath != "" {
 		// 尝试从model路径推断dataDir路径
-		// 例如：如果model在 models/tts/kokoro-multi-lang-v1_0/model.onnx
-		// 则dataDir应该在 models/tts/kokoro-multi-lang-v1_0/espeak-ng-data
 		modelDir := filepath.Dir(cfg.ModelPath)
 		potentialDataDir := filepath.Join(modelDir, "espeak-ng-data")
 		if _, err := os.Stat(potentialDataDir); err == nil {
@@ -95,43 +116,73 @@ func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
 		if _, err := os.Stat(phontabPath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("TTS phontab file not found: %s (required file missing in espeak-ng-data directory, please download models using scripts/download_models.sh)", phontabPath)
 		}
-		kokoroConfig.DataDir = dataDir
 	} else {
 		return nil, fmt.Errorf("TTS data_dir is required but not specified in config and cannot be inferred from model path (please set data_dir in config or ensure espeak-ng-data directory exists in model directory)")
 	}
 	
-	// 设置DictDir（可选，用于字典文件）
-	if cfg.DictDir != "" {
-		kokoroConfig.DictDir = cfg.DictDir
-	}
-	
-	// 设置Lexicon（可选，用于多语言支持）
-	// 如果配置中有多个lexicon文件，用逗号分隔
-	if cfg.Lexicon != "" {
-		kokoroConfig.Lexicon = cfg.Lexicon
-	} else if cfg.ModelPath != "" {
-		// 尝试从model路径推断lexicon路径
-		modelDir := filepath.Dir(cfg.ModelPath)
-		var lexiconPaths []string
-		for _, name := range []string{"lexicon-us-en.txt", "lexicon-zh.txt"} {
-			potentialLexicon := filepath.Join(modelDir, name)
-			if _, err := os.Stat(potentialLexicon); err == nil {
-				lexiconPaths = append(lexiconPaths, potentialLexicon)
+	// 根据模型类型完成配置
+	if !useVits {
+		// Kokoro 模型的额外配置
+		if cfg.TokensPath != "" {
+			kokoroConfig.Tokens = cfg.TokensPath
+		}
+		
+		// 设置Voices（可选，用于多说话人）
+		if cfg.VoicesPath != "" {
+			kokoroConfig.Voices = cfg.VoicesPath
+		}
+		
+		kokoroConfig.DataDir = dataDir
+		
+		// 设置DictDir（可选）
+		if cfg.DictDir != "" {
+			kokoroConfig.DictDir = cfg.DictDir
+		}
+		
+		// 设置Lexicon（可选）
+		if cfg.Lexicon != "" {
+			kokoroConfig.Lexicon = cfg.Lexicon
+		} else if cfg.ModelPath != "" {
+			// 尝试从model路径推断lexicon路径
+			modelDir := filepath.Dir(cfg.ModelPath)
+			var lexiconPaths []string
+			for _, name := range []string{"lexicon-us-en.txt", "lexicon-zh.txt"} {
+				potentialLexicon := filepath.Join(modelDir, name)
+				if _, err := os.Stat(potentialLexicon); err == nil {
+					lexiconPaths = append(lexiconPaths, potentialLexicon)
+				}
+			}
+			if len(lexiconPaths) > 0 {
+				kokoroConfig.Lexicon = strings.Join(lexiconPaths, ",")
 			}
 		}
-		if len(lexiconPaths) > 0 {
-			kokoroConfig.Lexicon = strings.Join(lexiconPaths, ",")
-		}
+	} else {
+		// VITS 模型已在上面配置
+		vitsConfig.DataDir = dataDir
 	}
 	
-	ttsConfig := sherpa.OfflineTtsConfig{
-		Model: sherpa.OfflineTtsModelConfig{
-			Kokoro:     kokoroConfig,
-			Provider:   config.GetProvider(&cfg.Provider),
-			NumThreads: cfg.Provider.NumThreads,
-			Debug:      0,
-		},
-		MaxNumSentences: 1,
+	// 创建 TTS 配置
+	var ttsConfig sherpa.OfflineTtsConfig
+	if useVits {
+		ttsConfig = sherpa.OfflineTtsConfig{
+			Model: sherpa.OfflineTtsModelConfig{
+				Vits:       vitsConfig,
+				Provider:   config.GetProvider(&cfg.Provider),
+				NumThreads: cfg.Provider.NumThreads,
+				Debug:      0,
+			},
+			MaxNumSentences: 1,
+		}
+	} else {
+		ttsConfig = sherpa.OfflineTtsConfig{
+			Model: sherpa.OfflineTtsModelConfig{
+				Kokoro:     kokoroConfig,
+				Provider:   config.GetProvider(&cfg.Provider),
+				NumThreads: cfg.Provider.NumThreads,
+				Debug:      0,
+			},
+			MaxNumSentences: 1,
+		}
 	}
 
 	// 创建TTS合成器
