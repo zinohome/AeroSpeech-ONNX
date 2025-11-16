@@ -49,6 +49,12 @@ type MonitorGetter interface {
 }
 
 // MonitorHandler 监控数据处理器
+// @Summary      获取实时监控数据
+// @Description  获取服务的实时监控数据，包括指标、资源和性能数据
+// @Tags         系统
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "监控数据"
+// @Router       /monitor [get]
 func MonitorHandler(getter MonitorGetter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		response := MonitorResponse{

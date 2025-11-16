@@ -64,6 +64,12 @@ type StatsGetter interface {
 }
 
 // StatsHandler 统计信息处理器
+// @Summary      获取综合统计信息
+// @Description  获取ASR、TTS、会话和资源的综合统计信息
+// @Tags         系统
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "统计信息"
+// @Router       /stats [get]
 func StatsHandler(getter StatsGetter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		response := StatsResponse{

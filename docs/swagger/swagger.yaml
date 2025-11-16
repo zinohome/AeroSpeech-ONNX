@@ -1,0 +1,293 @@
+basePath: /api/v1
+definitions:
+  handlers.BatchRecognizeRequest:
+    properties:
+      files:
+        items:
+          type: string
+        type: array
+    required:
+    - files
+    type: object
+  handlers.BatchSynthesizeRequest:
+    properties:
+      texts:
+        items:
+          $ref: '#/definitions/handlers.SynthesizeRequest'
+        type: array
+    required:
+    - texts
+    type: object
+  handlers.SynthesizeRequest:
+    properties:
+      speaker_id:
+        type: integer
+      speed:
+        type: number
+      text:
+        type: string
+    required:
+    - text
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: https://github.com/zhangjun/AeroSpeech-ONNX
+  description: 基于Sherpa-ONNX的语音识别(STT)和语音合成(TTS)服务API文档
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: AeroSpeech-ONNX API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: 检查服务健康状态和组件状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服务健康
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 健康检查
+      tags:
+      - 系统
+  /monitor:
+    get:
+      description: 获取服务的实时监控数据，包括指标、资源和性能数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 监控数据
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取实时监控数据
+      tags:
+      - 系统
+  /stats:
+    get:
+      description: 获取ASR、TTS、会话和资源的综合统计信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计信息
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取综合统计信息
+      tags:
+      - 系统
+  /stt/batch:
+    post:
+      consumes:
+      - application/json
+      description: 批量识别多个音频文件
+      parameters:
+      - description: 批量识别请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BatchRecognizeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 识别成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 批量识别
+      tags:
+      - STT
+  /stt/config:
+    get:
+      description: 获取语音识别服务的配置信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置信息
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取STT配置
+      tags:
+      - STT
+  /stt/recognize:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传音频文件进行语音识别
+      parameters:
+      - description: 音频文件
+        in: formData
+        name: audio
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 识别成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 文件上传识别
+      tags:
+      - STT
+  /stt/stats:
+    get:
+      description: 获取语音识别服务的统计信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计信息
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取STT统计信息
+      tags:
+      - STT
+  /tts/batch:
+    post:
+      consumes:
+      - application/json
+      description: 批量将多个文本合成为语音音频
+      parameters:
+      - description: 批量合成请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BatchSynthesizeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 合成成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 批量合成
+      tags:
+      - TTS
+  /tts/config:
+    get:
+      description: 获取语音合成服务的配置信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置信息
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取TTS配置
+      tags:
+      - TTS
+  /tts/speakers:
+    get:
+      description: 获取可用的说话人列表及其信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 说话人列表
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取说话人列表
+      tags:
+      - TTS
+  /tts/stats:
+    get:
+      description: 获取语音合成服务的统计信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计信息
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取TTS统计信息
+      tags:
+      - TTS
+  /tts/synthesize:
+    post:
+      consumes:
+      - application/json
+      description: 将文本合成为语音音频
+      parameters:
+      - description: 合成请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SynthesizeRequest'
+      produces:
+      - audio/wav
+      responses:
+        "200":
+          description: 音频文件
+          schema:
+            type: file
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 文本合成
+      tags:
+      - TTS
+produces:
+- application/json
+schemes:
+- http
+- https
+swagger: "2.0"

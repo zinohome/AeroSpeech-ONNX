@@ -39,6 +39,16 @@ type SynthesizeRequest struct {
 }
 
 // Synthesize 文本合成
+// @Summary      文本合成
+// @Description  将文本合成为语音音频
+// @Tags         TTS
+// @Accept       json
+// @Produce      audio/wav
+// @Param        request  body      SynthesizeRequest  true  "合成请求"
+// @Success      200      {file}    binary            "音频文件"
+// @Failure      400      {object}  map[string]interface{}  "请求参数错误"
+// @Failure      500      {object}  map[string]interface{}  "服务器错误"
+// @Router       /tts/synthesize [post]
 func (h *TTSHandler) Synthesize(c *gin.Context) {
 	var req SynthesizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -81,6 +91,16 @@ type BatchSynthesizeRequest struct {
 }
 
 // BatchSynthesize 批量合成
+// @Summary      批量合成
+// @Description  批量将多个文本合成为语音音频
+// @Tags         TTS
+// @Accept       json
+// @Produce      json
+// @Param        request  body      BatchSynthesizeRequest  true  "批量合成请求"
+// @Success      200      {object}  map[string]interface{}  "合成成功"
+// @Failure      400      {object}  map[string]interface{}  "请求参数错误"
+// @Failure      500      {object}  map[string]interface{}  "服务器错误"
+// @Router       /tts/batch [post]
 func (h *TTSHandler) BatchSynthesize(c *gin.Context) {
 	var req BatchSynthesizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -139,6 +159,12 @@ func (h *TTSHandler) BatchSynthesize(c *gin.Context) {
 }
 
 // GetSpeakers 获取说话人列表
+// @Summary      获取说话人列表
+// @Description  获取可用的说话人列表及其信息
+// @Tags         TTS
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "说话人列表"
+// @Router       /tts/speakers [get]
 func (h *TTSHandler) GetSpeakers(c *gin.Context) {
 	// Kokoro v1.1 支持 103 个说话人
 	// 参考: https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese-English/kokoro-multi-lang-v1_1.html
@@ -212,6 +238,12 @@ func (h *TTSHandler) GetSpeakers(c *gin.Context) {
 }
 
 // GetConfig 获取配置
+// @Summary      获取TTS配置
+// @Description  获取语音合成服务的配置信息
+// @Tags         TTS
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "配置信息"
+// @Router       /tts/config [get]
 func (h *TTSHandler) GetConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -228,6 +260,12 @@ func (h *TTSHandler) GetConfig(c *gin.Context) {
 }
 
 // GetStats 获取统计信息
+// @Summary      获取TTS统计信息
+// @Description  获取语音合成服务的统计信息
+// @Tags         TTS
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "统计信息"
+// @Router       /tts/stats [get]
 func (h *TTSHandler) GetStats(c *gin.Context) {
 	stats := h.manager.GetStats()
 	poolStats := h.manager.GetPoolStats()

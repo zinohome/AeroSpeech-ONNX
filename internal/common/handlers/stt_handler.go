@@ -46,6 +46,16 @@ type RecognizeResponse struct {
 }
 
 // Recognize 文件上传识别
+// @Summary      文件上传识别
+// @Description  上传音频文件进行语音识别
+// @Tags         STT
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        audio  formData  file  true  "音频文件"
+// @Success      200    {object}  map[string]interface{}  "识别成功"
+// @Failure      400    {object}  map[string]interface{}  "请求参数错误"
+// @Failure      500    {object}  map[string]interface{}  "服务器错误"
+// @Router       /stt/recognize [post]
 func (h *STTHandler) Recognize(c *gin.Context) {
 	// 从multipart form获取文件
 	file, err := c.FormFile("audio")
@@ -126,6 +136,16 @@ type BatchRecognizeResponse struct {
 }
 
 // BatchRecognize 批量识别
+// @Summary      批量识别
+// @Description  批量识别多个音频文件
+// @Tags         STT
+// @Accept       json
+// @Produce      json
+// @Param        request  body      BatchRecognizeRequest  true  "批量识别请求"
+// @Success      200      {object}  map[string]interface{}  "识别成功"
+// @Failure      400      {object}  map[string]interface{}  "请求参数错误"
+// @Failure      500      {object}  map[string]interface{}  "服务器错误"
+// @Router       /stt/batch [post]
 func (h *STTHandler) BatchRecognize(c *gin.Context) {
 	var req BatchRecognizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -179,6 +199,12 @@ func (h *STTHandler) BatchRecognize(c *gin.Context) {
 }
 
 // GetConfig 获取配置
+// @Summary      获取STT配置
+// @Description  获取语音识别服务的配置信息
+// @Tags         STT
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "配置信息"
+// @Router       /stt/config [get]
 func (h *STTHandler) GetConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -196,6 +222,12 @@ func (h *STTHandler) GetConfig(c *gin.Context) {
 }
 
 // GetStats 获取统计信息
+// @Summary      获取STT统计信息
+// @Description  获取语音识别服务的统计信息
+// @Tags         STT
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "统计信息"
+// @Router       /stt/stats [get]
 func (h *STTHandler) GetStats(c *gin.Context) {
 	stats := h.manager.GetStats()
 	poolStats := h.manager.GetPoolStats()

@@ -10,13 +10,45 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/bootstrap"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/config"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/handlers"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/logger"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/router"
 	"github.com/zhangjun/AeroSpeech-ONNX/internal/common/ws"
+	_ "github.com/zhangjun/AeroSpeech-ONNX/docs/swagger" // swagger docs
 )
+
+// @title           AeroSpeech-ONNX API
+// @version         1.0
+// @description     基于Sherpa-ONNX的语音识别(STT)和语音合成(TTS)服务API文档
+//
+// 本系统提供两种接口方式：
+// 1. REST API - 批量处理（文件上传、批量识别/合成）
+// 2. WebSocket API - 流式处理（实时音频流识别/合成）
+//
+// 流式处理接口：
+// - STT流式识别: ws://localhost:8080/ws/stt
+// - TTS流式合成: ws://localhost:8080/ws/tts
+// 详细文档请参考: docs/03-websocket接口设计.md
+//
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    https://github.com/zhangjun/AeroSpeech-ONNX
+// @contact.email  support@example.com
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @schemes   http https
+// @produce   json
+// @consume   json multipart/form-data
 
 func main() {
 	// 加载配置
@@ -257,6 +289,9 @@ func main() {
 				})
 			}
 		}
+
+		// Swagger文档
+		ginEngine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 		// 静态页面
 		ginEngine.GET("/", func(c *gin.Context) {

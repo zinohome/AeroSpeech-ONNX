@@ -31,6 +31,12 @@ var (
 )
 
 // HealthHandler 健康检查处理器
+// @Summary      健康检查
+// @Description  检查服务健康状态和组件状态
+// @Tags         系统
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}  "服务健康"
+// @Router       /health [get]
 func HealthHandler(components map[string]string, provider *ProviderInfo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		response := HealthResponse{

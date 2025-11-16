@@ -213,11 +213,39 @@ AeroSpeech-ONNX/
 
 ## API 文档
 
+### Swagger 文档
+
+项目已集成 Swagger API 文档，启动服务后可通过以下地址访问：
+
+- **Swagger UI**: http://localhost:8080/swagger/index.html
+
+Swagger 文档提供了：
+- 完整的 REST API 接口列表（批量处理）
+- 请求/响应参数说明
+- 在线测试功能
+- 交互式 API 文档
+
+> **注意**: Swagger 文档主要展示 REST API（批量处理）。**流式处理**通过 WebSocket 接口实现，请参考 [WebSocket 接口文档](docs/03-websocket接口设计.md)
+
+### 其他文档
+
 详细的 API 文档请参考 [docs/04-API设计.md](docs/04-API设计.md)
 
-## WebSocket 接口
+## WebSocket 接口（流式处理）
+
+系统支持通过 WebSocket 进行**流式处理**：
+
+- **STT 流式识别**: `ws://localhost:8080/ws/stt` - 实时音频流识别
+- **TTS 流式合成**: `ws://localhost:8080/ws/tts` - 实时文本转语音
 
 详细的 WebSocket 接口文档请参考 [docs/03-websocket接口设计.md](docs/03-websocket接口设计.md)
+
+### 接口对比
+
+| 接口类型 | 用途 | 延迟 | 适用场景 |
+|---------|------|------|---------|
+| **REST API** | 批量处理 | 较高 | 文件上传、批量处理 |
+| **WebSocket** | 流式处理 | 低 | 实时对话、流式播放 |
 
 ## 配置说明
 
