@@ -30,6 +30,27 @@ type TTSProvider struct {
 
 // NewTTSProvider 创建TTS Provider
 func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
+	// 检查模型文件是否存在
+	if cfg.ModelPath != "" {
+		if _, err := os.Stat(cfg.ModelPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("TTS model file not found: %s (please check if the model file exists or download models using scripts/download_models.sh)", cfg.ModelPath)
+		}
+	}
+	
+	// 检查tokens文件是否存在
+	if cfg.TokensPath != "" {
+		if _, err := os.Stat(cfg.TokensPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("TTS tokens file not found: %s (please check if the tokens file exists or download models using scripts/download_models.sh)", cfg.TokensPath)
+		}
+	}
+	
+	// 检查voices文件是否存在（如果配置了）
+	if cfg.VoicesPath != "" {
+		if _, err := os.Stat(cfg.VoicesPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("TTS voices file not found: %s (please check if the voices file exists or download models using scripts/download_models.sh)", cfg.VoicesPath)
+		}
+	}
+	
 	// 构建sherpa-onnx配置
 	sampleRate := 24000 // 默认采样率
 	
@@ -63,8 +84,20 @@ func NewTTSProvider(cfg *config.TTSModelConfig) (*TTSProvider, error) {
 			dataDir = potentialDataDir
 		}
 	}
+	
+	// 检查dataDir是否存在以及必需的phontab文件
 	if dataDir != "" {
+		if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+			return nil, fmt.Errorf("TTS data directory not found: %s (please check if the espeak-ng-data directory exists or download models using scripts/download_models.sh)", dataDir)
+		}
+		// 检查必需的phontab文件
+		phontabPath := filepath.Join(dataDir, "phontab")
+		if _, err := os.Stat(phontabPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("TTS phontab file not found: %s (required file missing in espeak-ng-data directory, please download models using scripts/download_models.sh)", phontabPath)
+		}
 		kokoroConfig.DataDir = dataDir
+	} else {
+		return nil, fmt.Errorf("TTS data_dir is required but not specified in config and cannot be inferred from model path (please set data_dir in config or ensure espeak-ng-data directory exists in model directory)")
 	}
 	
 	// 设置DictDir（可选，用于字典文件）
