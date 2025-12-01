@@ -12,13 +12,13 @@ import (
 
 // Pool ASR资源池
 type Pool struct {
-	providers   chan Provider
-	config      *config.ASRConfig
-	size        int
-	mu          sync.RWMutex
-	stats       *PoolStats
-	ctx         context.Context
-	cancel      context.CancelFunc
+	providers chan Provider
+	config    *config.ASRConfig
+	size      int
+	mu        sync.RWMutex
+	stats     *PoolStats
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // PoolStats 资源池统计信息
@@ -117,13 +117,12 @@ func (p *Pool) Get(ctx context.Context) (Provider, error) {
 		return provider, nil
 
 	case <-time.After(100 * time.Millisecond):
-		// 超时，尝试创建临时Provider
-		logger.Warn("Pool timeout, creating temporary provider")
-		provider, err := p.createTemporaryProvider()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temporary provider: %w", err)
-		}
-		return provider, nil
+		// 超时，不创建临时Provider，直接返回错误
+		// 在高负载下创建临时Provider会导致系统雪崩（因为初始化需要加载模型，消耗大量IO和内存）
+		p.stats.mu.Lock()
+		p.stats.TotalWaits++
+		p.stats.mu.Unlock()
+		return nil, fmt.Errorf("server busy: no available ASR provider")
 
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -131,27 +130,6 @@ func (p *Pool) Get(ctx context.Context) (Provider, error) {
 	case <-p.ctx.Done():
 		return nil, fmt.Errorf("pool is closed")
 	}
-}
-
-// createTemporaryProvider 创建临时Provider
-func (p *Pool) createTemporaryProvider() (Provider, error) {
-	provider, err := NewASRProvider(p.config)
-	if err != nil {
-		return nil, err
-	}
-
-	// 预热Provider
-	if err := provider.Warmup(); err != nil {
-		provider.Release()
-		return nil, err
-	}
-
-	p.stats.mu.Lock()
-	p.stats.TotalCreated++
-	p.stats.mu.Unlock()
-
-	logger.Info("Created temporary ASR provider")
-	return provider, nil
 }
 
 // Put 归还Provider到资源池
@@ -195,12 +173,12 @@ func (p *Pool) GetStats() map[string]interface{} {
 	return map[string]interface{}{
 		"size":            p.size,
 		"available":       len(p.providers),
-		"total_created":  p.stats.TotalCreated,
+		"total_created":   p.stats.TotalCreated,
 		"total_destroyed": p.stats.TotalDestroyed,
-		"current_active": p.stats.CurrentActive,
-		"max_wait_time":  p.stats.MaxWaitTime.String(),
-		"total_waits":    p.stats.TotalWaits,
-		"usage":          p.GetUsage(),
+		"current_active":  p.stats.CurrentActive,
+		"max_wait_time":   p.stats.MaxWaitTime.String(),
+		"total_waits":     p.stats.TotalWaits,
+		"usage":           p.GetUsage(),
 	}
 }
 
@@ -222,4 +200,3 @@ func (p *Pool) Close() error {
 	logger.Info("ASR pool closed")
 	return nil
 }
-

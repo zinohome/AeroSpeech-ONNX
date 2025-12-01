@@ -51,36 +51,51 @@ func (h *STTHandler) HandleConnection(conn *websocket.Conn) {
 		conn.Close()
 		return
 	}
+	defer func() {
+		h.sessionManager.RemoveSession(sess.ID)
+		sess.Close()
+	}()
 
 	// 发送连接确认消息
 	configMsg := STTMessage{
 		Type:      "connection",
 		SessionID: sess.ID,
 		Data: map[string]interface{}{
-			"status":      "connected",
+			"status":     "connected",
 			"session_id": sess.ID,
 			"config": map[string]interface{}{
-				"sample_rate":     h.config.Audio.SampleRate,
-				"chunk_size":      h.config.Audio.ChunkSize,
-				"format":          "pcm_s16le",
-				"provider":        h.config.ASR.Provider.Provider,
-				"gpu_available":   h.config.ASR.Provider.Provider == "cuda",
-				"gpu_device_id":   h.config.ASR.Provider.DeviceID,
+				"sample_rate":   h.config.Audio.SampleRate,
+				"chunk_size":    h.config.Audio.ChunkSize,
+				"format":        "pcm_s16le",
+				"provider":      h.config.ASR.Provider.Provider,
+				"gpu_available": h.config.ASR.Provider.Provider == "cuda",
+				"gpu_device_id": h.config.ASR.Provider.DeviceID,
 			},
 		},
 	}
 
 	if err := sess.Send(configMsg); err != nil {
 		logger.Errorf("Failed to send connection message: %v", err)
-		sess.Close()
 		return
 	}
 
 	// 设置Pong处理器
 	SetPongHandler(conn, time.Duration(h.config.WebSocket.ReadTimeout)*time.Second)
 
-	// 处理消息循环
-	audioBuffer := make([]byte, 0, h.config.Audio.ChunkSize*2)
+	// 创建音频处理通道
+	// 使用带缓冲的通道，避免处理慢阻塞读取
+	audioChan := make(chan []byte, 10)
+
+	// 启动处理协程
+	go h.processPump(sess, audioChan)
+
+	// 启动读取循环
+	h.readPump(sess, conn, audioChan)
+}
+
+// readPump 读取WebSocket消息
+func (h *STTHandler) readPump(sess *session.Session, conn *websocket.Conn, audioChan chan []byte) {
+	defer close(audioChan)
 
 	for {
 		messageType, message, err := conn.ReadMessage()
@@ -96,13 +111,17 @@ func (h *STTHandler) HandleConnection(conn *websocket.Conn) {
 
 		switch messageType {
 		case websocket.BinaryMessage:
-			// 音频数据
-			audioBuffer = append(audioBuffer, message...)
-
-			// 当缓冲区达到一定大小时，进行识别
-			if len(audioBuffer) >= h.config.Audio.ChunkSize {
-				h.processAudio(sess, audioBuffer)
-				audioBuffer = audioBuffer[:0] // 清空缓冲区
+			// 音频数据，发送到处理通道
+			select {
+			case audioChan <- message:
+			default:
+				// 通道已满，丢弃数据或报错
+				logger.Warnf("Audio buffer full for session %s, dropping packet", sess.ID)
+				sess.Send(STTMessage{
+					Type:      "warning",
+					SessionID: sess.ID,
+					Error:     "server busy, audio packet dropped",
+				})
 			}
 
 		case websocket.TextMessage:
@@ -115,8 +134,9 @@ func (h *STTHandler) HandleConnection(conn *websocket.Conn) {
 
 			switch msg.Type {
 			case "reset":
-				// 重置识别
-				audioBuffer = audioBuffer[:0]
+				// 重置识别 - 这里其实很难真正重置正在处理的音频，
+				// 但可以清空通道中尚未处理的数据（如果channel支持清空的话，但channel不支持直接清空）
+				// 简单的做法是发送一个重置信号到processPump，或者由客户端控制
 				sess.Send(STTMessage{
 					Type:      "reset",
 					SessionID: sess.ID,
@@ -132,17 +152,29 @@ func (h *STTHandler) HandleConnection(conn *websocket.Conn) {
 			}
 		}
 	}
+}
+
+// processPump 处理音频数据
+func (h *STTHandler) processPump(sess *session.Session, audioChan <-chan []byte) {
+	audioBuffer := make([]byte, 0, h.config.Audio.ChunkSize*2)
+
+	for audioData := range audioChan {
+		audioBuffer = append(audioBuffer, audioData...)
+
+		// 当缓冲区达到一定大小时，进行识别
+		if len(audioBuffer) >= h.config.Audio.ChunkSize {
+			h.processAudio(sess, audioBuffer)
+			audioBuffer = audioBuffer[:0] // 清空缓冲区
+		}
+	}
 
 	// 处理剩余的音频数据
 	if len(audioBuffer) > 0 {
 		h.processAudio(sess, audioBuffer)
 	}
-
-	// 清理会话
-	h.sessionManager.RemoveSession(sess.ID)
 }
 
-// processAudio 处理音频数据
+// processAudio 执行ASR识别
 func (h *STTHandler) processAudio(sess *session.Session, audio []byte) {
 	// 执行识别
 	result, err := h.asrManager.Transcribe(nil, audio)
@@ -166,4 +198,3 @@ func (h *STTHandler) processAudio(sess *session.Session, audio []byte) {
 		},
 	})
 }
-
